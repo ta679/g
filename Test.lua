@@ -114,20 +114,21 @@ workspace.FallenPartsDestroyHeight = 0/0
 
 seperate("Loading UI")
 
+-- Changed to black and white color scheme
 local UI_CONFIG = {
-    MainColor = Color3.fromRGB(22, 22, 24),
-    SecondaryColor = Color3.fromRGB(30, 30, 34),
-    AccentColor = Color3.fromRGB(56, 189, 248),
-    AccentColorDark = Color3.fromRGB(30, 120, 200),
-    TextColor = Color3.fromRGB(255, 255, 255),
-    SubTextColor = Color3.fromRGB(180, 180, 200),
-    BorderColor = Color3.fromRGB(40, 44, 55),
-    HoverColor = Color3.fromRGB(45, 50, 65),
-    ToggleOnColor = Color3.fromRGB(56, 189, 248),
-    ToggleOffColor = Color3.fromRGB(60, 65, 80),
-    ErrorColor = Color3.fromRGB(220, 60, 60),
-    SuccessColor = Color3.fromRGB(40, 200, 100),
-    WarningColor = Color3.fromRGB(255, 184, 50),
+    MainColor = Color3.fromRGB(10, 10, 10), -- Black
+    SecondaryColor = Color3.fromRGB(25, 25, 25), -- Dark gray
+    AccentColor = Color3.fromRGB(200, 200, 200), -- Light gray
+    AccentColorDark = Color3.fromRGB(150, 150, 150), -- Medium gray
+    TextColor = Color3.fromRGB(255, 255, 255), -- White
+    SubTextColor = Color3.fromRGB(180, 180, 180), -- Light gray
+    BorderColor = Color3.fromRGB(50, 50, 50), -- Medium gray
+    HoverColor = Color3.fromRGB(40, 40, 40), -- Dark gray hover
+    ToggleOnColor = Color3.fromRGB(200, 200, 200), -- Light gray
+    ToggleOffColor = Color3.fromRGB(80, 80, 80), -- Medium gray
+    ErrorColor = Color3.fromRGB(220, 60, 60), -- Keeping red for errors
+    SuccessColor = Color3.fromRGB(180, 180, 180), -- Light gray for success
+    WarningColor = Color3.fromRGB(200, 200, 200), -- Light gray for warnings
     
     CornerRadius = UDim.new(0, 4),
     ButtonCornerRadius = UDim.new(0, 4),
