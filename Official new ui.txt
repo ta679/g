@@ -1,0 +1,846 @@
+-- Phantom Hub UI
+-- Customizable Color Codes (Edit these values to change the UI colors)
+local COLORS = {
+    BACKGROUND = Color3.fromRGB(5, 5, 5),      -- Very dark background (almost black)
+    HEADER = Color3.fromRGB(10, 10, 10),       -- Very dark header
+    ACCENT = Color3.fromRGB(255, 0, 128),      -- Accent color (pink)
+    TEXT_PRIMARY = Color3.fromRGB(255, 255, 255), -- Primary text
+    TEXT_SECONDARY = Color3.fromRGB(200, 200, 200), -- Secondary text
+    TAB_BACKGROUND = Color3.fromRGB(10, 10, 10), -- Tab background (darker)
+    TAB_SELECTED = Color3.fromRGB(20, 20, 20), -- Selected tab
+    BUTTON = Color3.fromRGB(20, 20, 20),       -- Button background
+    BUTTON_HOVER = Color3.fromRGB(30, 30, 30), -- Button hover
+    -- Notification colors
+    NOTIFICATION_INFO = Color3.fromRGB(0, 122, 255),    -- Blue
+    NOTIFICATION_SUCCESS = Color3.fromRGB(52, 199, 89), -- Green
+    NOTIFICATION_WARNING = Color3.fromRGB(255, 149, 0), -- Orange
+    NOTIFICATION_ERROR = Color3.fromRGB(255, 59, 48),   -- Red
+}
+
+-- Create the main GUI
+local PhantomHub = Instance.new("ScreenGui")
+PhantomHub.Name = "PhantomHub"
+PhantomHub.ResetOnSpawn = false
+PhantomHub.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Make it work for mobile and PC
+local function setupGUI()
+    -- Check if it's running on a mobile device
+    local isMobile = game:GetService("UserInputService").TouchEnabled and 
+                     not game:GetService("UserInputService").KeyboardEnabled
+    
+    -- Set parent based on platform
+    if game:GetService("RunService"):IsStudio() then
+        PhantomHub.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    else
+        PhantomHub.Parent = game:GetService("CoreGui")
+    end
+    
+    return isMobile
+end
+
+local isMobile = setupGUI()
+
+-- Create the main frame with new size (310×310)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 310, 0, 310) -- Changed to requested size
+MainFrame.Position = UDim2.new(0.5, -155, 0.5, -155) -- Center the frame
+MainFrame.BackgroundColor3 = COLORS.BACKGROUND
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = PhantomHub
+
+-- Add white shadow effect
+local WhiteShadow = Instance.new("ImageLabel")
+WhiteShadow.Name = "WhiteShadow"
+WhiteShadow.AnchorPoint = Vector2.new(0.5, 0.5)
+WhiteShadow.BackgroundTransparency = 1
+WhiteShadow.Position = UDim2.new(0.5, 0, 0.5, 0)
+WhiteShadow.Size = UDim2.new(1, 20, 1, 20) -- Slightly larger than parent
+WhiteShadow.ZIndex = -1 -- Place behind the main frame
+WhiteShadow.Image = "rbxassetid://5028857084" -- Rounded rect image
+WhiteShadow.ImageColor3 = Color3.fromRGB(255, 255, 255)
+WhiteShadow.ImageTransparency = 0.8 -- Subtle glow
+WhiteShadow.ScaleType = Enum.ScaleType.Slice
+WhiteShadow.SliceCenter = Rect.new(24, 24, 276, 276)
+WhiteShadow.Parent = MainFrame
+
+-- Add corner radius (much more rounded like in the image)
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 20) -- Very rounded corners to match image
+MainCorner.Parent = MainFrame
+
+-- Create header (now almost invisible since we want a unified dark look)
+local Header = Instance.new("Frame")
+Header.Name = "Header"
+Header.Size = UDim2.new(1, 0, 0, 30) -- Smaller header for smaller UI
+Header.BackgroundColor3 = COLORS.HEADER
+Header.BorderSizePixel = 0
+Header.Parent = MainFrame
+
+-- Add corner radius to header
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 20) -- Match the main frame corners
+HeaderCorner.Parent = Header
+
+-- Create floating title with "Phantom Hub"
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Size = UDim2.new(1, 0, 1, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Phantom Hub"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16 -- Smaller text for smaller UI
+Title.TextColor3 = COLORS.ACCENT
+Title.Parent = Header
+
+-- Add floating effect to title
+local function floatTitle()
+    local originalPosition = Title.Position
+    local connection
+    
+    connection = game:GetService("RunService").RenderStepped:Connect(function(deltaTime)
+        local time = tick()
+        -- Subtle floating effect
+        Title.Position = UDim2.new(
+            originalPosition.X.Scale, 
+            originalPosition.X.Offset, 
+            originalPosition.Y.Scale, 
+            math.sin(time * 1.5) * 2 -- Reduced amplitude for smaller UI
+        )
+    end)
+    
+    -- Clean up when GUI is destroyed
+    PhantomHub.AncestryChanged:Connect(function(_, parent)
+        if parent == nil then
+            connection:Disconnect()
+        end
+    end)
+end
+
+floatTitle()
+
+-- Create close button
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 24, 0, 24)
+CloseButton.Position = UDim2.new(1, -28, 0, 3)
+CloseButton.BackgroundColor3 = COLORS.ACCENT
+CloseButton.Text = "X"
+CloseButton.TextColor3 = COLORS.TEXT_PRIMARY
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.TextSize = 12 -- Smaller text for smaller UI
+CloseButton.Parent = Header
+
+-- Add corner radius to close button
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseButton
+
+-- Create tabs sidebar (now with more transparency to blend with main frame)
+local TabsSidebar = Instance.new("Frame")
+TabsSidebar.Name = "TabsSidebar"
+TabsSidebar.Size = UDim2.new(0, 80, 1, -30) -- Smaller sidebar for smaller UI
+TabsSidebar.Position = UDim2.new(0, 0, 0, 30)
+TabsSidebar.BackgroundColor3 = COLORS.TAB_BACKGROUND
+TabsSidebar.BackgroundTransparency = 0.2 -- Slight transparency
+TabsSidebar.BorderSizePixel = 0
+TabsSidebar.Parent = MainFrame
+
+-- Create content frame
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "ContentFrame"
+ContentFrame.Size = UDim2.new(1, -80, 1, -30) -- Adjusted for smaller sidebar
+ContentFrame.Position = UDim2.new(0, 80, 0, 30)
+ContentFrame.BackgroundColor3 = COLORS.BACKGROUND
+ContentFrame.BackgroundTransparency = 0.1 -- Slight transparency
+ContentFrame.BorderSizePixel = 0
+ContentFrame.Parent = MainFrame
+
+-- Create tab buttons
+local tabButtons = {}
+local tabContents = {}
+local tabs = {"Main", "Dancing", "Reanimation", "Teleport", "Universal", "Settings"}
+
+-- Function to create tab content
+local function createTabContent(name)
+    local content = Instance.new("Frame")
+    content.Name = name.."Content"
+    content.Size = UDim2.new(1, 0, 1, 0)
+    content.BackgroundTransparency = 1
+    content.Visible = false
+    content.Parent = ContentFrame
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 25) -- Smaller title for smaller UI
+    title.BackgroundTransparency = 1
+    title.Text = name
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14 -- Smaller text for smaller UI
+    title.TextColor3 = COLORS.TEXT_PRIMARY
+    title.Parent = content
+    
+    -- Add some placeholder content
+    local placeholder = Instance.new("TextLabel")
+    placeholder.Size = UDim2.new(1, 0, 0, 20) -- Smaller placeholder for smaller UI
+    placeholder.Position = UDim2.new(0, 0, 0, 30)
+    placeholder.BackgroundTransparency = 1
+    placeholder.Text = name.." content goes here"
+    placeholder.Font = Enum.Font.Gotham
+    placeholder.TextSize = 12 -- Smaller text for smaller UI
+    placeholder.TextColor3 = COLORS.TEXT_SECONDARY
+    placeholder.Parent = content
+    
+    return content
+end
+
+-- Function to select a tab
+local function selectTab(index)
+    for i, button in ipairs(tabButtons) do
+        if i == index then
+            button.BackgroundColor3 = COLORS.TAB_SELECTED
+            tabContents[i].Visible = true
+        else
+            button.BackgroundColor3 = COLORS.TAB_BACKGROUND
+            tabContents[i].Visible = false
+        end
+    end
+end
+
+-- Create tab buttons and content
+for i, tabName in ipairs(tabs) do
+    -- Create tab button
+    local tabButton = Instance.new("TextButton")
+    tabButton.Name = tabName.."Tab"
+    tabButton.Size = UDim2.new(1, -10, 0, 30) -- Smaller buttons for smaller UI
+    tabButton.Position = UDim2.new(0, 5, 0, 5 + (i-1) * 35) -- Adjusted spacing
+    tabButton.BackgroundColor3 = i == 1 and COLORS.TAB_SELECTED or COLORS.TAB_BACKGROUND
+    tabButton.Text = tabName
+    tabButton.TextColor3 = COLORS.TEXT_PRIMARY
+    tabButton.Font = Enum.Font.GothamSemibold
+    tabButton.TextSize = 12 -- Smaller text for smaller UI
+    tabButton.Parent = TabsSidebar
+    
+    -- Add corner radius to tab button
+    local tabCorner = Instance.new("UICorner")
+    tabCorner.CornerRadius = UDim.new(0, 8) -- Slightly smaller corner radius
+    tabCorner.Parent = tabButton
+    
+    -- Create tab content
+    local content = createTabContent(tabName)
+    content.Visible = i == 1
+    
+    -- Store references
+    tabButtons[i] = tabButton
+    tabContents[i] = content
+    
+    -- Connect button click
+    tabButton.MouseButton1Click:Connect(function()
+        selectTab(i)
+    end)
+end
+
+-- Create special content for Settings tab
+local function createColorPicker(parent, colorName, defaultColor, posY)
+    local container = Instance.new("Frame")
+    container.Name = colorName.."Container"
+    container.Size = UDim2.new(0.9, 0, 0, 20) -- Smaller container for smaller UI
+    container.Position = UDim2.new(0.05, 0, 0, posY)
+    container.BackgroundTransparency = 1
+    container.Parent = parent
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.4, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = colorName
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 10 -- Smaller text for smaller UI
+    label.TextColor3 = COLORS.TEXT_PRIMARY
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+    
+    -- Create RGB sliders
+    local colors = {"R", "G", "B"}
+    local sliders = {}
+    
+    for i, color in ipairs(colors) do
+        local slider = Instance.new("Frame")
+        slider.Name = color.."Slider"
+        slider.Size = UDim2.new(0.15, 0, 0, 16) -- Smaller sliders for smaller UI
+        slider.Position = UDim2.new(0.45 + (i-1) * 0.18, 0, 0.5, -8)
+        slider.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        slider.BorderSizePixel = 0
+        slider.Parent = container
+        
+        local sliderCorner = Instance.new("UICorner")
+        sliderCorner.CornerRadius = UDim.new(0, 4)
+        sliderCorner.Parent = slider
+        
+        local value = Instance.new("TextBox")
+        value.Size = UDim2.new(1, 0, 1, 0)
+        value.BackgroundTransparency = 1
+        value.Text = tostring(defaultColor[i])
+        value.Font = Enum.Font.Gotham
+        value.TextSize = 10 -- Smaller text for smaller UI
+        value.TextColor3 = COLORS.TEXT_PRIMARY
+        value.Parent = slider
+        
+        sliders[i] = value
+        
+        -- Update color when value changes
+        value.FocusLost:Connect(function()
+            local num = tonumber(value.Text)
+            if num then
+                num = math.clamp(num, 0, 255)
+                value.Text = tostring(num)
+                
+                -- Update color
+                local r = tonumber(sliders[1].Text) or 0
+                local g = tonumber(sliders[2].Text) or 0
+                local b = tonumber(sliders[3].Text) or 0
+                
+                COLORS[string.upper(colorName)] = Color3.fromRGB(r, g, b)
+                
+                -- Update UI elements with this color
+                updateUIColors()
+            end
+        end)
+    end
+    
+    return container
+end
+
+-- Function to update UI colors
+function updateUIColors()
+    -- Update main elements
+    MainFrame.BackgroundColor3 = COLORS.BACKGROUND
+    Header.BackgroundColor3 = COLORS.HEADER
+    Title.TextColor3 = COLORS.ACCENT
+    CloseButton.BackgroundColor3 = COLORS.ACCENT
+    TabsSidebar.BackgroundColor3 = COLORS.TAB_BACKGROUND
+    ContentFrame.BackgroundColor3 = COLORS.BACKGROUND
+    
+    -- Update tab buttons
+    for i, button in ipairs(tabButtons) do
+        if button.BackgroundColor3 == COLORS.TAB_SELECTED then
+            button.BackgroundColor3 = COLORS.TAB_SELECTED
+        else
+            button.BackgroundColor3 = COLORS.TAB_BACKGROUND
+        end
+        button.TextColor3 = COLORS.TEXT_PRIMARY
+    end
+    
+    -- Update all text labels
+    for _, content in ipairs(tabContents) do
+        for _, child in pairs(content:GetDescendants()) do
+            if child:IsA("TextLabel") then
+                if child.Name == "Title" then
+                    child.TextColor3 = COLORS.TEXT_PRIMARY
+                else
+                    child.TextColor3 = COLORS.TEXT_SECONDARY
+                end
+            end
+        end
+    end
+end
+
+-- Create settings content
+local settingsIndex = table.find(tabs, "Settings")
+if settingsIndex then
+    local settingsContent = tabContents[settingsIndex]
+    
+    -- Clear default content
+    for _, child in pairs(settingsContent:GetChildren()) do
+        if child.Name ~= "Title" then
+            child:Destroy()
+        end
+    end
+    
+    -- Add color customization
+    local colorTitle = Instance.new("TextLabel")
+    colorTitle.Size = UDim2.new(0.9, 0, 0, 20) -- Smaller title for smaller UI
+    colorTitle.Position = UDim2.new(0.05, 0, 0, 30)
+    colorTitle.BackgroundTransparency = 1
+    colorTitle.Text = "UI Color Customization"
+    colorTitle.Font = Enum.Font.GothamBold
+    colorTitle.TextSize = 12 -- Smaller text for smaller UI
+    colorTitle.TextColor3 = COLORS.TEXT_PRIMARY
+    colorTitle.TextXAlignment = Enum.TextXAlignment.Left
+    colorTitle.Parent = settingsContent
+    
+    -- Create color pickers
+    local colorNames = {
+        {"Background", {5, 5, 5}}, -- Updated to darker color
+        {"Header", {10, 10, 10}},
+        {"Accent", {255, 0, 128}},
+        {"Text_Primary", {255, 255, 255}},
+        {"Text_Secondary", {200, 200, 200}}
+    }
+    
+    for i, colorData in ipairs(colorNames) do
+        createColorPicker(settingsContent, colorData[1], colorData[2], 55 + (i-1) * 25) -- Adjusted spacing
+    end
+    
+    -- Add reset button
+    local resetButton = Instance.new("TextButton")
+    resetButton.Size = UDim2.new(0.4, 0, 0, 20) -- Smaller button for smaller UI
+    resetButton.Position = UDim2.new(0.3, 0, 0, 55 + #colorNames * 25)
+    resetButton.BackgroundColor3 = COLORS.ACCENT
+    resetButton.Text = "Reset Colors"
+    resetButton.TextColor3 = COLORS.TEXT_PRIMARY
+    resetButton.Font = Enum.Font.GothamBold
+    resetButton.TextSize = 10 -- Smaller text for smaller UI
+    resetButton.Parent = settingsContent
+    
+    local resetCorner = Instance.new("UICorner")
+    resetCorner.CornerRadius = UDim.new(0, 8) -- More rounded corners
+    resetCorner.Parent = resetButton
+    
+    resetButton.MouseButton1Click:Connect(function()
+        -- Reset colors to default
+        COLORS = {
+            BACKGROUND = Color3.fromRGB(5, 5, 5), -- Updated to darker color
+            HEADER = Color3.fromRGB(10, 10, 10),
+            ACCENT = Color3.fromRGB(255, 0, 128),
+            TEXT_PRIMARY = Color3.fromRGB(255, 255, 255),
+            TEXT_SECONDARY = Color3.fromRGB(200, 200, 200),
+            TAB_BACKGROUND = Color3.fromRGB(10, 10, 10), -- Updated to darker color
+            TAB_SELECTED = Color3.fromRGB(20, 20, 20),
+            BUTTON = Color3.fromRGB(20, 20, 20),
+            BUTTON_HOVER = Color3.fromRGB(30, 30, 30),
+            NOTIFICATION_INFO = Color3.fromRGB(0, 122, 255),
+            NOTIFICATION_SUCCESS = Color3.fromRGB(52, 199, 89),
+            NOTIFICATION_WARNING = Color3.fromRGB(255, 149, 0),
+            NOTIFICATION_ERROR = Color3.fromRGB(255, 59, 48),
+        }
+        
+        updateUIColors()
+        
+        -- Show a success notification
+        showNotification("Colors reset to default", "success")
+    end)
+    
+    -- Add keybind info
+    local keybindInfo = Instance.new("TextLabel")
+    keybindInfo.Size = UDim2.new(0.9, 0, 0, 20) -- Smaller text for smaller UI
+    keybindInfo.Position = UDim2.new(0.05, 0, 0, 55 + #colorNames * 25 + 25)
+    keybindInfo.BackgroundTransparency = 1
+    keybindInfo.Text = "Press 'L' to toggle UI visibility"
+    keybindInfo.Font = Enum.Font.Gotham
+    keybindInfo.TextSize = 10 -- Smaller text for smaller UI
+    keybindInfo.TextColor3 = COLORS.TEXT_SECONDARY
+    keybindInfo.TextXAlignment = Enum.TextXAlignment.Center
+    keybindInfo.Parent = settingsContent
+end
+
+-- Connect close button
+CloseButton.MouseButton1Click:Connect(function()
+    PhantomHub:Destroy()
+end)
+
+-- Add resize handle in the corner
+local ResizeHandle = Instance.new("TextButton")
+ResizeHandle.Name = "ResizeHandle"
+ResizeHandle.Size = UDim2.new(0, 20, 0, 20)
+ResizeHandle.Position = UDim2.new(1, -20, 1, -20)
+ResizeHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ResizeHandle.BackgroundTransparency = 0.7 -- More transparent
+ResizeHandle.Text = ""
+ResizeHandle.Parent = MainFrame
+
+local ResizeCorner = Instance.new("UICorner")
+ResizeCorner.CornerRadius = UDim.new(1, 0) -- Make it circular
+ResizeCorner.Parent = ResizeHandle
+
+-- Make UI resizable from any corner
+local function makeResizable()
+    local UserInputService = game:GetService("UserInputService")
+    local dragging = false
+    local startPos, startSize
+    local resizeFromTopLeft = false
+    local resizeFromTopRight = false
+    local resizeFromBottomLeft = false
+    local resizeFromBottomRight = false
+    
+    -- Create corner resize handles
+    local corners = {
+        {name = "TopLeft", position = UDim2.new(0, 0, 0, 0), cursor = "nw-resize"},
+        {name = "TopRight", position = UDim2.new(1, -20, 0, 0), cursor = "ne-resize"},
+        {name = "BottomLeft", position = UDim2.new(0, 0, 1, -20), cursor = "sw-resize"},
+        {name = "BottomRight", position = UDim2.new(1, -20, 1, -20), cursor = "se-resize"}
+    }
+    
+    local cornerHandles = {}
+    
+    for _, corner in ipairs(corners) do
+        local handle = Instance.new("TextButton")
+        handle.Name = corner.name .. "Handle"
+        handle.Size = UDim2.new(0, 20, 0, 20)
+        handle.Position = corner.position
+        handle.BackgroundTransparency = 1 -- Invisible but clickable
+        handle.Text = ""
+        handle.ZIndex = 10 -- Above other elements
+        handle.Parent = MainFrame
+        
+        cornerHandles[corner.name] = handle
+        
+        -- Mouse down event
+        handle.MouseButton1Down:Connect(function()
+            dragging = true
+            startPos = UserInputService:GetMouseLocation()
+            startSize = MainFrame.Size
+            local startPosition = MainFrame.Position
+            
+            -- Determine resize direction
+            resizeFromTopLeft = corner.name == "TopLeft"
+            resizeFromTopRight = corner.name == "TopRight"
+            resizeFromBottomLeft = corner.name == "BottomLeft"
+            resizeFromBottomRight = corner.name == "BottomRight"
+        end)
+    end
+    
+    -- Main resize handle (bottom right)
+    ResizeHandle.MouseButton1Down:Connect(function()
+        dragging = true
+        startPos = UserInputService:GetMouseLocation()
+        startSize = MainFrame.Size
+        resizeFromBottomRight = true
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+            resizeFromTopLeft = false
+            resizeFromTopRight = false
+            resizeFromBottomLeft = false
+            resizeFromBottomRight = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = UserInputService:GetMouseLocation() - startPos
+            local newSize = startSize
+            local newPosition = MainFrame.Position
+            
+            -- Resize from different corners
+            if resizeFromBottomRight then
+                -- Bottom right (standard resize)
+                newSize = UDim2.new(
+                    startSize.X.Scale,
+                    math.max(200, startSize.X.Offset + delta.X),
+                    startSize.Y.Scale,
+                    math.max(200, startSize.Y.Offset + delta.Y)
+                )
+            elseif resizeFromTopLeft then
+                -- Top left (resize and reposition)
+                local widthChange = math.min(startSize.X.Offset - 200, delta.X)
+                local heightChange = math.min(startSize.Y.Offset - 200, delta.Y)
+                
+                newSize = UDim2.new(
+                    startSize.X.Scale,
+                    math.max(200, startSize.X.Offset - widthChange),
+                    startSize.Y.Scale,
+                    math.max(200, startSize.Y.Offset - heightChange)
+                )
+                
+                newPosition = UDim2.new(
+                    MainFrame.Position.X.Scale,
+                    MainFrame.Position.X.Offset + widthChange,
+                    MainFrame.Position.Y.Scale,
+                    MainFrame.Position.Y.Offset + heightChange
+                )
+            elseif resizeFromTopRight then
+                -- Top right (resize height and reposition Y)
+                local heightChange = math.min(startSize.Y.Offset - 200, delta.Y)
+                
+                newSize = UDim2.new(
+                    startSize.X.Scale,
+                    math.max(200, startSize.X.Offset + delta.X),
+                    startSize.Y.Scale,
+                    math.max(200, startSize.Y.Offset - heightChange)
+                )
+                
+                newPosition = UDim2.new(
+                    MainFrame.Position.X.Scale,
+                    MainFrame.Position.X.Offset,
+                    MainFrame.Position.Y.Scale,
+                    MainFrame.Position.Y.Offset + heightChange
+                )
+            elseif resizeFromBottomLeft then
+                -- Bottom left (resize width and reposition X)
+                local widthChange = math.min(startSize.X.Offset - 200, delta.X)
+                
+                newSize = UDim2.new(
+                    startSize.X.Scale,
+                    math.max(200, startSize.X.Offset - widthChange),
+                    startSize.Y.Scale,
+                    math.max(200, startSize.Y.Offset + delta.Y)
+                )
+                
+                newPosition = UDim2.new(
+                    MainFrame.Position.X.Scale,
+                    MainFrame.Position.X.Offset + widthChange,
+                    MainFrame.Position.Y.Scale,
+                    MainFrame.Position.Y.Offset
+                )
+            end
+            
+            -- Update size and position
+            MainFrame.Size = newSize
+            MainFrame.Position = newPosition
+            
+            -- Update shadow size
+            WhiteShadow.Size = UDim2.new(1, 20, 1, 20)
+        end
+    end)
+end
+
+makeResizable()
+
+-- Add keybind to close UI (L key)
+local UserInputService = game:GetService("UserInputService")
+local isVisible = true
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.L then
+        isVisible = not isVisible
+        PhantomHub.Enabled = isVisible
+    end
+end)
+
+-- Mobile optimization
+if isMobile then
+    -- Make buttons bigger for touch
+    for _, button in ipairs(tabButtons) do
+        button.Size = UDim2.new(1, -10, 0, 40)
+    end
+    
+    -- Adjust spacing
+    for i, button in ipairs(tabButtons) do
+        button.Position = UDim2.new(0, 5, 0, 5 + (i-1) * 45)
+    end
+    
+    -- Make close button bigger
+    CloseButton.Size = UDim2.new(0, 30, 0, 30)
+    CloseButton.Position = UDim2.new(1, -35, 0, 0)
+    CloseButton.TextSize = 16
+    
+    -- Make resize handle bigger
+    ResizeHandle.Size = UDim2.new(0, 30, 0, 30)
+    ResizeHandle.Position = UDim2.new(1, -30, 1, -30)
+end
+
+-- Create notification container
+local NotificationContainer = Instance.new("Frame")
+NotificationContainer.Name = "NotificationContainer"
+NotificationContainer.Size = UDim2.new(0, 250, 1, 0) -- Smaller notifications for smaller UI
+NotificationContainer.Position = UDim2.new(1, -270, 0, 0)
+NotificationContainer.BackgroundTransparency = 1
+NotificationContainer.Parent = PhantomHub
+
+-- Create notification system
+local activeNotifications = {}
+local notificationHeight = 70 -- Slightly smaller notifications
+local notificationPadding = 8
+local notificationDuration = 5 -- seconds
+
+-- Function to show a notification
+function showNotification(message, notificationType)
+    notificationType = notificationType or "info" -- Default to info
+    
+    -- Get notification color based on type
+    local notifColor
+    if notificationType == "success" then
+        notifColor = COLORS.NOTIFICATION_SUCCESS
+    elseif notificationType == "warning" then
+        notifColor = COLORS.NOTIFICATION_WARNING
+    elseif notificationType == "error" then
+        notifColor = COLORS.NOTIFICATION_ERROR
+    else
+        notifColor = COLORS.NOTIFICATION_INFO
+    end
+    
+    -- Create notification frame
+    local notification = Instance.new("Frame")
+    notification.Name = "Notification_" .. tick()
+    notification.Size = UDim2.new(1, -20, 0, notificationHeight)
+    notification.Position = UDim2.new(0, 10, 1, 10) -- Start below the screen
+    notification.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- Slightly lighter than background
+    notification.BorderSizePixel = 0
+    notification.Parent = NotificationContainer
+    
+    -- Add corner radius
+    local notifCorner = Instance.new("UICorner")
+    notifCorner.CornerRadius = UDim.new(0, 10)
+    notifCorner.Parent = notification
+    
+    -- Add colored indicator
+    local indicator = Instance.new("Frame")
+    indicator.Name = "Indicator"
+    indicator.Size = UDim2.new(0, 3, 1, -16)
+    indicator.Position = UDim2.new(0, 8, 0, 8)
+    indicator.BackgroundColor3 = notifColor
+    indicator.BorderSizePixel = 0
+    indicator.Parent = notification
+    
+    local indicatorCorner = Instance.new("UICorner")
+    indicatorCorner.CornerRadius = UDim.new(0, 2)
+    indicatorCorner.Parent = indicator
+    
+    -- Add notification icon
+    local iconText = "i"
+    if notificationType == "success" then
+        iconText = "✓"
+    elseif notificationType == "warning" then
+        iconText = "!"
+    elseif notificationType == "error" then
+        iconText = "✕"
+    end
+    
+    local icon = Instance.new("TextLabel")
+    icon.Name = "Icon"
+    icon.Size = UDim2.new(0, 24, 0, 24)
+    icon.Position = UDim2.new(0, 20, 0, 8)
+    icon.BackgroundColor3 = notifColor
+    icon.Text = iconText
+    icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+    icon.Font = Enum.Font.GothamBold
+    icon.TextSize = 14
+    icon.Parent = notification
+    
+    local iconCorner = Instance.new("UICorner")
+    iconCorner.CornerRadius = UDim.new(0, 12)
+    iconCorner.Parent = icon
+    
+    -- Add notification message
+    local messageLabel = Instance.new("TextLabel")
+    messageLabel.Name = "Message"
+    messageLabel.Size = UDim2.new(1, -70, 1, -16)
+    messageLabel.Position = UDim2.new(0, 54, 0, 8)
+    messageLabel.BackgroundTransparency = 1
+    messageLabel.Text = message
+    messageLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    messageLabel.Font = Enum.Font.Gotham
+    messageLabel.TextSize = 12
+    messageLabel.TextWrapped = true
+    messageLabel.TextXAlignment = Enum.TextXAlignment.Left
+    messageLabel.TextYAlignment = Enum.TextYAlignment.Center
+    messageLabel.Parent = notification
+    
+    -- Add close button
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Name = "CloseButton"
+    closeBtn.Size = UDim2.new(0, 20, 0, 20)
+    closeBtn.Position = UDim2.new(1, -28, 0, 8)
+    closeBtn.BackgroundTransparency = 1
+    closeBtn.Text = "✕"
+    closeBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 12
+    closeBtn.Parent = notification
+    
+    -- Add progress bar
+    local progressBar = Instance.new("Frame")
+    progressBar.Name = "ProgressBar"
+    progressBar.Size = UDim2.new(1, 0, 0, 3)
+    progressBar.Position = UDim2.new(0, 0, 1, -3)
+    progressBar.BackgroundColor3 = notifColor
+    progressBar.BorderSizePixel = 0
+    progressBar.Parent = notification
+    
+    local progressBarCorner = Instance.new("UICorner")
+    progressBarCorner.CornerRadius = UDim.new(0, 2)
+    progressBarCorner.Parent = progressBar
+    
+    -- Add to active notifications
+    table.insert(activeNotifications, notification)
+    
+    -- Update positions of all notifications
+    updateNotificationPositions()
+    
+    -- Animate notification in
+    local tweenService = game:GetService("TweenService")
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    
+    local targetPosition = UDim2.new(0, 10, 1, -((#activeNotifications * (notificationHeight + notificationPadding)) + 10))
+    local tween = tweenService:Create(notification, tweenInfo, {Position = targetPosition})
+    tween:Play()
+    
+    -- Set up progress bar animation
+    local progressTweenInfo = TweenInfo.new(notificationDuration, Enum.EasingStyle.Linear)
+    local progressTween = tweenService:Create(progressBar, progressTweenInfo, {Size = UDim2.new(0, 0, 0, 3)})
+    progressTween:Play()
+    
+    -- Set up auto-removal
+    local removeConnection
+    removeConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not notification or not notification.Parent then
+            removeConnection:Disconnect()
+            return
+        end
+    end)
+    
+    -- Handle close button
+    closeBtn.MouseButton1Click:Connect(function()
+        removeNotification(notification)
+    end)
+    
+    -- Auto-remove after duration
+    delay(notificationDuration, function()
+        if notification and notification.Parent then
+            removeNotification(notification)
+        end
+    end)
+    
+    return notification
+end
+
+-- Function to remove a notification
+function removeNotification(notification)
+    -- Find the notification in the active list
+    local index = table.find(activeNotifications, notification)
+    if not index then return end
+    
+    -- Remove from active list
+    table.remove(activeNotifications, index)
+    
+    -- Animate out
+    local tweenService = game:GetService("TweenService")
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+    
+    local tween = tweenService:Create(notification, tweenInfo, {Position = UDim2.new(1, 10, notification.Position.Y.Scale, notification.Position.Y.Offset)})
+    tween:Play()
+    
+    tween.Completed:Connect(function()
+        notification:Destroy()
+        updateNotificationPositions()
+    end)
+end
+
+-- Function to update positions of all notifications
+function updateNotificationPositions()
+    local tweenService = game:GetService("TweenService")
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    
+    for i, notification in ipairs(activeNotifications) do
+        local targetPosition = UDim2.new(0, 10, 1, -((i * (notificationHeight + notificationPadding)) + 10))
+        local tween = tweenService:Create(notification, tweenInfo, {Position = targetPosition})
+        tween:Play()
+    end
+end
+
+-- Show a welcome notification when the UI loads
+delay(0.5, function()
+    showNotification("Welcome to Phantom Hub", "info")
+end)
+
+-- Return the GUI and notification function
+local PhantomHubAPI = {
+    GUI = PhantomHub,
+    showNotification = showNotification
+}
+
+return PhantomHubAPI
