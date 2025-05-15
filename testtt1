@@ -1426,4 +1426,4 @@ I've created a modern script UI for Roblox with a clean, intuitive design that f
 This script UI is designed to be loaded with a simple loadstring:
 
 ```lua
-loadstring(game:HttpGet("YOUR_RAW_SCRIPT_URL"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/ta679/g/refs/heads/main/testtt1"))()
