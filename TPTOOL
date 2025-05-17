@@ -1,0 +1,21 @@
+                local player = game.Players.LocalPlayer 
+                           local mouse = player:GetMouse() 
+
+                           local tool = Instance.new("Tool") 
+                           tool.Name = "Teleport Tool" 
+                           tool.RequiresHandle = false 
+                           tool.Parent = player.Backpack 
+
+                           local function teleportToClick() 
+                               local character = player.Character or player.CharacterAdded:Wait() 
+                               local rootPart = character:FindFirstChild("HumanoidRootPart") 
+
+                               if rootPart and mouse.Target then 
+                                   local targetPosition = mouse.Hit.Position 
+                                   rootPart.CFrame = CFrame.new(targetPosition + Vector3.new(0, 3, 0)) 
+                               end
+                           end
+
+                           tool.Activated:Connect(teleportToClick) 
+                       end 
+                   }) 
