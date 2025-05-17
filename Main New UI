@@ -1,1 +1,641 @@
+-- Phantom Hub Premium - Key System
+-- A professional key verification system
+-- Created by Phantom Hub Team
 
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+
+-- Variables
+local Player = Players.LocalPlayer
+local Mouse = Player:GetMouse()
+local KeySystem = {}
+local MainScript = nil -- Will hold the main UI script
+
+-- Constants
+local BACKGROUND_COLOR = Color3.fromRGB(15, 15, 15)
+local MAIN_COLOR = Color3.fromRGB(25, 25, 25)
+local ACCENT_COLOR = Color3.fromRGB(220, 50, 50)
+local TEXT_COLOR = Color3.fromRGB(255, 255, 255)
+local SECONDARY_TEXT_COLOR = Color3.fromRGB(180, 180, 180)
+local HOVER_COLOR = Color3.fromRGB(40, 40, 40)
+local ERROR_COLOR = Color3.fromRGB(255, 70, 70)
+local SUCCESS_COLOR = Color3.fromRGB(70, 200, 120)
+local FONT = Enum.Font.GothamBold
+local ANIMATION_DURATION = 0.3
+local KEY_WINDOW_SIZE = UDim2.new(0, 350, 0, 200)
+
+-- Valid keys (in a real system, these would be stored securely on a server)
+local VALID_KEYS = {
+    "PHANTOM-HUB-2024",
+    "PREMIUM-ACCESS-V2",
+    "DEVELOPER-KEY-123"
+}
+
+-- Utility Functions
+local function CreateInstance(className, properties)
+    local instance = Instance.new(className)
+    for k, v in pairs(properties or {}) do
+        instance[k] = v
+    end
+    return instance
+end
+
+local function CreateTween(instance, properties, duration, easingStyle, easingDirection)
+    local tween = TweenService:Create(
+        instance,
+        TweenInfo.new(duration or ANIMATION_DURATION, easingStyle or Enum.EasingStyle.Quad, easingDirection or Enum.EasingDirection.Out),
+        properties
+    )
+    return tween
+end
+
+-- Add glow effect to an object
+local function AddGlowEffect(object)
+    -- Outer glow
+    local outerGlow = CreateInstance("UIStroke", {
+        Parent = object,
+        Color = ACCENT_COLOR,
+        Thickness = 1.5,
+        Transparency = 0.2,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    })
+
+    -- Inner glow gradient
+    local innerGlow = CreateInstance("UIGradient", {
+        Parent = outerGlow,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 100, 100)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 50, 50))
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.3),
+            NumberSequenceKeypoint.new(1, 0.7)
+        })
+    })
+
+    -- Animate the glow
+    spawn(function()
+        local rotation = 0
+        while object and object.Parent do
+            rotation = (rotation + 1) % 360
+            if innerGlow and innerGlow.Parent then
+                innerGlow.Rotation = rotation
+            end
+            wait(0.1)
+        end
+    end)
+
+    return outerGlow
+end
+
+-- Make an object draggable
+local function MakeDraggable(topBarObject, object)
+    local dragging = false
+    local dragInput, mousePos, framePos
+
+    topBarObject.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            mousePos = input.Position
+            framePos = object.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    topBarObject.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - mousePos
+            object.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- Animation functions
+local function AnimateOpen(element, originalSize)
+    -- Make sure element is visible but transparent
+    element.Visible = true
+    element.BackgroundTransparency = 1
+    element.Size = UDim2.new(
+        originalSize.X.Scale, originalSize.X.Offset * 0.9,
+        originalSize.Y.Scale, originalSize.Y.Offset * 0.9
+    )
+
+    -- For all children, set transparency
+    for _, child in pairs(element:GetChildren()) do
+        if child:IsA("GuiObject") and not child:IsA("UIStroke") then
+            if child.ClassName ~= "UICorner" and child.ClassName ~= "UIGradient" then
+                child.BackgroundTransparency = 1
+                if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+                    child.TextTransparency = 1
+                end
+                if child:IsA("ImageLabel") or child:IsA("ImageButton") then
+                    child.ImageTransparency = 1
+                end
+            end
+        end
+    end
+
+    -- Create and play size/position tween
+    local sizeTween = CreateTween(element, {
+        Size = originalSize,
+        BackgroundTransparency = 0
+    })
+    sizeTween:Play()
+
+    -- Create and play transparency tweens for children
+    for _, child in pairs(element:GetChildren()) do
+        if child:IsA("GuiObject") and not child:IsA("UIStroke") then
+            if child.ClassName ~= "UICorner" and child.ClassName ~= "UIGradient" then
+                local properties = {BackgroundTransparency = child.BackgroundTransparency}
+
+                if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+                    properties.TextTransparency = 0
+                end
+
+                if child:IsA("ImageLabel") or child:IsA("ImageButton") then
+                    properties.ImageTransparency = 0
+                end
+
+                CreateTween(child, properties):Play()
+            end
+        end
+    end
+
+    return sizeTween
+end
+
+local function AnimateClose(element, originalSize, callback)
+    -- Create and play size/position tween
+    local sizeTween = CreateTween(element, {
+        Size = UDim2.new(
+            originalSize.X.Scale, originalSize.X.Offset * 0.9,
+            originalSize.Y.Scale, originalSize.Y.Offset * 0.9
+        ),
+        BackgroundTransparency = 1
+    })
+
+    -- Create and play transparency tweens for children
+    for _, child in pairs(element:GetChildren()) do
+        if child:IsA("GuiObject") and not child:IsA("UIStroke") then
+            if child.ClassName ~= "UICorner" and child.ClassName ~= "UIGradient" then
+                local properties = {BackgroundTransparency = 1}
+
+                if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+                    properties.TextTransparency = 1
+                end
+
+                if child:IsA("ImageLabel") or child:IsA("ImageButton") then
+                    properties.ImageTransparency = 1
+                end
+
+                CreateTween(child, properties):Play()
+            end
+        end
+    end
+
+    sizeTween:Play()
+
+    -- After tween completes, hide the element
+    sizeTween.Completed:Connect(function()
+        element.Visible = false
+        if callback then
+            callback()
+        end
+    end)
+
+    return sizeTween
+end
+
+-- Create Button
+local function CreateButton(parent, name, position, size, callback)
+    local button = CreateInstance("TextButton", {
+        Name = name .. "Button",
+        Parent = parent,
+        BackgroundColor3 = MAIN_COLOR,
+        BorderSizePixel = 0,
+        Position = position,
+        Size = size,
+        Font = FONT,
+        Text = name,
+        TextColor3 = TEXT_COLOR,
+        TextSize = 14,
+        ZIndex = 4,
+        AutoButtonColor = false
+    })
+
+    -- Rounded corners
+    local buttonCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = button
+    })
+
+    -- Gradient effect
+    local buttonGradient = CreateInstance("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 40)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 30, 30))
+        }),
+        Rotation = 90,
+        Parent = button
+    })
+
+    -- Hover and click effects
+    button.MouseEnter:Connect(function()
+        CreateTween(button, {BackgroundColor3 = HOVER_COLOR}):Play()
+    end)
+
+    button.MouseLeave:Connect(function()
+        CreateTween(button, {BackgroundColor3 = MAIN_COLOR}):Play()
+    end)
+
+    button.MouseButton1Down:Connect(function()
+        CreateTween(button, {BackgroundColor3 = ACCENT_COLOR}):Play()
+    end)
+
+    button.MouseButton1Up:Connect(function()
+        CreateTween(button, {BackgroundColor3 = HOVER_COLOR}):Play()
+        if callback then
+            callback()
+        end
+    end)
+
+    return button
+end
+
+-- Show notification
+local function ShowNotification(parent, message, color)
+    -- Create notification
+    local notification = CreateInstance("Frame", {
+        Name = "Notification",
+        Parent = parent,
+        BackgroundColor3 = color or MAIN_COLOR,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0.5, -125, 0.8, 0),
+        Size = UDim2.new(0, 250, 0, 30),
+        ZIndex = 10
+    })
+
+    -- Rounded corners for notification
+    local notificationCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 4),
+        Parent = notification
+    })
+
+    -- Notification text
+    local notificationText = CreateInstance("TextLabel", {
+        Name = "NotificationText",
+        Parent = notification,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -20, 1, 0),
+        Font = FONT,
+        Text = message,
+        TextColor3 = TEXT_COLOR,
+        TextSize = 12,
+        ZIndex = 11
+    })
+
+    -- Animate notification
+    notification.Position = UDim2.new(0.5, -125, 1, 10)
+    CreateTween(notification, {Position = UDim2.new(0.5, -125, 0.8, 0)}):Play()
+
+    -- Remove notification after delay
+    delay(3, function()
+        CreateTween(notification, {Position = UDim2.new(0.5, -125, 1, 10)}):Play()
+        delay(0.5, function()
+            notification:Destroy()
+        end)
+    end)
+    
+    return notification
+end
+
+-- Validate key
+local function ValidateKey(key)
+    -- Check if key is in the valid keys list
+    for _, validKey in ipairs(VALID_KEYS) do
+        if key == validKey then
+            return true
+        end
+    end
+    
+    -- You could also implement an API call to validate the key on a server
+    -- This would be more secure than storing keys in the script
+    
+    return false
+end
+
+-- Create Key System UI
+function KeySystem:Create()
+    -- Check if GUI already exists
+    if CoreGui:FindFirstChild("PhantomHubKeySystem") then
+        CoreGui:FindFirstChild("PhantomHubKeySystem"):Destroy()
+    end
+
+    -- Main GUI
+    self.GUI = CreateInstance("ScreenGui", {
+        Name = "Phantom Hub Key System",
+        Parent = CoreGui,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        ResetOnSpawn = false
+    })
+    
+    -- Background overlay (semi-transparent)
+    self.Overlay = CreateInstance("Frame", {
+        Name = "Overlay",
+        Parent = self.GUI,
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.5,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
+        ZIndex = 1
+    })
+
+    -- Key Window
+    self.KeyWindow = CreateInstance("Frame", {
+        Name = "Phantom Hub",
+        Parent = self.GUI,
+        BackgroundColor3 = BACKGROUND_COLOR,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0.5, -KEY_WINDOW_SIZE.X.Offset / 2, 0.5, -KEY_WINDOW_SIZE.Y.Offset / 2),
+        Size = KEY_WINDOW_SIZE,
+        ZIndex = 2
+    })
+
+    -- Rounded corners for Key Window
+    local keyWindowCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 10),
+        Parent = self.KeyWindow
+    })
+
+    -- Add glow effect to Key Window
+    AddGlowEffect(self.KeyWindow)
+
+    -- Make Key Window draggable
+    MakeDraggable(self.KeyWindow, self.KeyWindow)
+
+    -- Title Bar
+    local titleBar = CreateInstance("Frame", {
+        Name = "TitleBar",
+        Parent = self.KeyWindow,
+        BackgroundColor3 = MAIN_COLOR,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 0, 30),
+        ZIndex = 3
+    })
+
+    -- Rounded corners for Title Bar (top only)
+    local titleBarCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 10),
+        Parent = titleBar
+    })
+
+    -- Fix for the rounded corners (only top)
+    local titleBarFix = CreateInstance("Frame", {
+        Name = "TitleBarFix",
+        Parent = titleBar,
+        BackgroundColor3 = MAIN_COLOR,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0.5, 0),
+        Size = UDim2.new(1, 0, 0.5, 0),
+        ZIndex = 3
+    })
+
+    -- Title Text
+    local titleText = CreateInstance("TextLabel", {
+        Name = "TitleText",
+        Parent = titleBar,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -20, 1, 0),
+        Font = FONT,
+        Text = "Phantom Hub Premium - Key System",
+        TextColor3 = TEXT_COLOR,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 4
+    })
+
+    -- Content Container
+    local contentContainer = CreateInstance("Frame", {
+        Name = "ContentContainer",
+        Parent = self.KeyWindow,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 40),
+        Size = UDim2.new(1, -20, 1, -50),
+        ZIndex = 3
+    })
+
+    -- Key Input Label
+    local keyInputLabel = CreateInstance("TextLabel", {
+        Name = "KeyInputLabel",
+        Parent = contentContainer,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 0, 20),
+        Font = FONT,
+        Text = "Enter your key to access Phantom Hub:",
+        TextColor3 = TEXT_COLOR,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 4
+    })
+
+    -- Key Input Box
+    local keyInputBox = CreateInstance("TextBox", {
+        Name = "KeyInputBox",
+        Parent = contentContainer,
+        BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 25),
+        Size = UDim2.new(1, 0, 0, 30),
+        Font = FONT,
+        PlaceholderText = "Enter key here...",
+        Text = "",
+        TextColor3 = TEXT_COLOR,
+        TextSize = 14,
+        ClearTextOnFocus = false,
+        ZIndex = 4
+    })
+
+    -- Rounded corners for Key Input Box
+    local keyInputBoxCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = keyInputBox
+    })
+
+    -- Status Label
+    local statusLabel = CreateInstance("TextLabel", {
+        Name = "StatusLabel",
+        Parent = contentContainer,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 60),
+        Size = UDim2.new(1, 0, 0, 20),
+        Font = FONT,
+        Text = "Status: Waiting for key...",
+        TextColor3 = SECONDARY_TEXT_COLOR,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 4
+    })
+
+    -- Submit Button
+    local submitButton = CreateButton(
+        contentContainer, 
+        "Submit", 
+        UDim2.new(0, 0, 0, 90), 
+        UDim2.new(0.48, 0, 0, 30),
+        function()
+            local key = keyInputBox.Text
+            
+            if key == "" then
+                statusLabel.Text = "Status: Please enter a key."
+                statusLabel.TextColor3 = ERROR_COLOR
+                return
+            end
+            
+            -- Show loading status
+            statusLabel.Text = "Status: Validating key..."
+            statusLabel.TextColor3 = SECONDARY_TEXT_COLOR
+            
+            -- Simulate network delay (in a real system, this would be an actual API call)
+            wait(1)
+            
+            if ValidateKey(key) then
+                statusLabel.Text = "Status: Key validated successfully!"
+                statusLabel.TextColor3 = SUCCESS_COLOR
+                
+                -- Show success notification
+                ShowNotification(self.GUI, "Access granted! Loading Phantom Hub...", SUCCESS_COLOR)
+                
+                -- Save the key for future sessions
+                local success, result = pcall(function()
+                    if not Player:FindFirstChild("PhantomHubKey") then
+                        local keyValue = Instance.new("StringValue")
+                        keyValue.Name = "PhantomHubKey"
+                        keyValue.Value = key
+                        keyValue.Parent = Player
+                    else
+                        Player.PhantomHubKey.Value = key
+                    end
+                end)
+                
+                -- Close key system and load main UI
+                wait(1)
+                AnimateClose(self.KeyWindow, KEY_WINDOW_SIZE, function()
+                    -- Load the main UI script here
+                    self:LoadMainUI()
+                end)
+            else
+                statusLabel.Text = "Status: Invalid key. Please try again."
+                statusLabel.TextColor3 = ERROR_COLOR
+                
+                -- Show error notification
+                ShowNotification(self.GUI, "Invalid key! Please check and try again.", ERROR_COLOR)
+            end
+        end
+    )
+
+    -- Get Key Button
+    local getKeyButton = CreateButton(
+        contentContainer, 
+        "Get Key", 
+        UDim2.new(0.52, 0, 0, 90), 
+        UDim2.new(0.48, 0, 0, 30),
+        function()
+            -- Open the key retrieval website or Discord
+            statusLabel.Text = "Status: Opening key retrieval website..."
+            statusLabel.TextColor3 = SECONDARY_TEXT_COLOR
+            
+            -- You can replace this URL with your actual key distribution site
+            pcall(function()
+                setclipboard("https://phantom-hub.com/getkey")
+            end)
+            
+            ShowNotification(self.GUI, "Link copied to clipboard!", nil)
+            statusLabel.Text = "Status: Link copied to clipboard!"
+        end
+    )
+
+    -- Discord Button
+    local discordButton = CreateButton(
+        contentContainer, 
+        "Join Discord", 
+        UDim2.new(0, 0, 0, 130), 
+        UDim2.new(1, 0, 0, 30),
+        function()
+            -- Open Discord invite
+            pcall(function()
+                setclipboard("https://discord.gg/phantomhub")
+            end)
+            
+            ShowNotification(self.GUI, "Discord invite copied to clipboard!", nil)
+        end
+    )
+
+    -- Check for saved key
+    local savedKey = nil
+    pcall(function()
+        if Player:FindFirstChild("PhantomHubKey") then
+            savedKey = Player.PhantomHubKey.Value
+        end
+    end)
+    
+    if savedKey and savedKey ~= "" then
+        keyInputBox.Text = savedKey
+        statusLabel.Text = "Status: Key found! Click Submit to verify."
+        statusLabel.TextColor3 = SECONDARY_TEXT_COLOR
+    end
+
+    -- Animate opening
+    AnimateOpen(self.KeyWindow, KEY_WINDOW_SIZE)
+
+    return self
+end
+
+-- Load Main UI
+function KeySystem:LoadMainUI()
+    -- Destroy key system GUI
+    if self.GUI then
+        self.GUI:Destroy()
+    end
+    
+    -- Load the main UI script
+    -- In a real implementation, you would load your main UI script here
+    -- For example:
+    
+    -- Option 1: If your main UI is in a separate script
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/ta679/g/refs/heads/main/Phantom%20Hub%20UI"))()
+    
+    -- Option 2: If your main UI is stored as a string
+    if MainScript then
+        loadstring(MainScript)()
+    end
+    
+    -- Option 3: If your main UI is a ModuleScript
+    -- local mainUI = require(game.ReplicatedStorage.PhantomHubUI)
+    -- mainUI:Create()
+end
+
+-- Initialize Key System
+local keySystemInstance = KeySystem:Create()
+
+-- Return the KeySystem object
+return KeySystem
