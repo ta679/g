@@ -1,1 +1,1186 @@
+-- Phantom Hub Premium V2
+-- A professional Roblox GUI script with enhanced features
+-- Created by Phantom Hub Team
 
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+
+-- Variables
+local Player = Players.LocalPlayer
+local Mouse = Player:GetMouse()
+local PhantomHub = {}
+local Dragging = false
+local DragInput
+local DragStart
+local StartPos
+
+-- Constants
+local MAIN_COLOR = Color3.fromRGB(25, 25, 25)
+local ACCENT_COLOR = Color3.fromRGB(220, 50, 50) -- Changed to red theme
+local TEXT_COLOR = Color3.fromRGB(255, 255, 255)
+local HOVER_COLOR = Color3.fromRGB(40, 40, 40)
+local BACKGROUND_COLOR = Color3.fromRGB(15, 15, 15)
+local GLOW_COLOR = Color3.fromRGB(255, 100, 100) -- Changed to red glow
+local TRANSPARENCY = 0.1
+local FONT = Enum.Font.GothamBold -- Changed font
+local UI_SIZE = UDim2.new(0, 400, 0, 300) -- Increased size
+local FLOATING_TAB_SIZE = UDim2.new(0, 230, 0, 40) -- Increased size
+local ANIMATION_DURATION = 0.3
+local SECONDARY_TEXT_COLOR = Color3.fromRGB(180, 180, 180)
+local BUTTON_COLOR = Color3.fromRGB(20, 20, 20)
+
+-- Utility Functions
+local function CreateInstance(className, properties)
+    local instance = Instance.new(className)
+    for k, v in pairs(properties or {}) do
+        instance[k] = v
+    end
+    return instance
+end
+
+-- Modified MakeDraggable function to connect both UI elements
+local function MakeDraggable(topBarObject, object, linkedObject, offset)
+    local dragging = false
+    local dragInput, mousePos, framePos, linkedPos
+
+    topBarObject.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            mousePos = input.Position
+            framePos = object.Position
+
+            if linkedObject then
+                linkedPos = linkedObject.Position
+            end
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    topBarObject.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - mousePos
+
+            -- Update main object position
+            local newPosition = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+            object.Position = newPosition
+
+            -- Update linked object position if it exists
+            if linkedObject and linkedPos then
+                linkedObject.Position = UDim2.new(linkedPos.X.Scale, linkedPos.X.Offset + delta.X, linkedPos.Y.Scale, linkedPos.Y.Offset + delta.Y)
+            end
+        end
+    end)
+end
+
+local function CreateTween(instance, properties, duration, easingStyle, easingDirection)
+    local tween = TweenService:Create(
+        instance,
+        TweenInfo.new(duration or ANIMATION_DURATION, easingStyle or Enum.EasingStyle.Quad, easingDirection or Enum.EasingDirection.Out),
+        properties
+    )
+    return tween
+end
+
+-- Add glow effect to an object
+local function AddGlowEffect(object)
+    -- Outer glow
+    local outerGlow = CreateInstance("UIStroke", {
+        Parent = object,
+        Color = GLOW_COLOR,
+        Thickness = 1.5,
+        Transparency = 0.2,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    })
+
+    -- Inner glow gradient
+    local innerGlow = CreateInstance("UIGradient", {
+        Parent = outerGlow,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 100, 100)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 50, 50))
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.3),
+            NumberSequenceKeypoint.new(1, 0.7)
+        })
+    })
+
+    -- Animate the glow
+    spawn(function()
+        local rotation = 0
+        while object and object.Parent do
+            rotation = (rotation + 1) % 360
+            if innerGlow and innerGlow.Parent then
+                innerGlow.Rotation = rotation
+            end
+            wait(0.1)
+        end
+    end)
+
+    return outerGlow
+end
+
+-- Animation functions
+local function AnimateOpen(element, originalSize, originalPosition)
+    -- Make sure element is visible but transparent
+    element.Visible = true
+    element.BackgroundTransparency = 1
+    element.Size = UDim2.new(
+        originalSize.X.Scale, originalSize.X.Offset * 0.9,
+        originalSize.Y.Scale, originalSize.Y.Offset * 0.9
+    )
+
+    -- For all children, set transparency
+    for _, child in pairs(element:GetChildren()) do
+        if child:IsA("GuiObject") and not child:IsA("UIStroke") then
+            if child.ClassName ~= "UICorner" and child.ClassName ~= "UIGradient" then
+                child.BackgroundTransparency = 1
+                if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+                    child.TextTransparency = 1
+                end
+                if child:IsA("ImageLabel") or child:IsA("ImageButton") then
+                    child.ImageTransparency = 1
+                end
+            end
+        end
+    end
+
+    -- Create and play size/position tween
+    local sizeTween = CreateTween(element, {
+        Size = originalSize,
+        BackgroundTransparency = 0
+    })
+    sizeTween:Play()
+
+    -- Create and play transparency tweens for children
+    for _, child in pairs(element:GetChildren()) do
+        if child:IsA("GuiObject") and not child:IsA("UIStroke") then
+            if child.ClassName ~= "UICorner" and child.ClassName ~= "UIGradient" then
+                local properties = {BackgroundTransparency = child.BackgroundTransparency}
+
+                if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+                    properties.TextTransparency = 0
+                end
+
+                if child:IsA("ImageLabel") or child:IsA("ImageButton") then
+                    properties.ImageTransparency = 0
+                end
+
+                CreateTween(child, properties):Play()
+            end
+        end
+    end
+
+    return sizeTween
+end
+
+local function AnimateClose(element, originalSize, callback)
+    -- Create and play size/position tween
+    local sizeTween = CreateTween(element, {
+        Size = UDim2.new(
+            originalSize.X.Scale, originalSize.X.Offset * 0.9,
+            originalSize.Y.Scale, originalSize.Y.Offset * 0.9
+        ),
+        BackgroundTransparency = 1
+    })
+
+    -- Create and play transparency tweens for children
+    for _, child in pairs(element:GetChildren()) do
+        if child:IsA("GuiObject") and not child:IsA("UIStroke") then
+            if child.ClassName ~= "UICorner" and child.ClassName ~= "UIGradient" then
+                local properties = {BackgroundTransparency = 1}
+
+                if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+                    properties.TextTransparency = 1
+                end
+
+                if child:IsA("ImageLabel") or child:IsA("ImageButton") then
+                    properties.ImageTransparency = 1
+                end
+
+                CreateTween(child, properties):Play()
+            end
+        end
+    end
+
+    sizeTween:Play()
+
+    -- After tween completes, hide the element
+    sizeTween.Completed:Connect(function()
+        element.Visible = false
+        if callback then
+            callback()
+        end
+    end)
+
+    return sizeTween
+end
+
+-- Toggle UI function with animations
+local function ToggleUI(self)
+    if self.MainContainer.Visible then
+        -- Close animation
+        AnimateClose(self.FloatingTab, FLOATING_TAB_SIZE)
+        AnimateClose(self.MainContainer, UI_SIZE)
+    else
+        -- Open animation
+        AnimateOpen(self.FloatingTab, FLOATING_TAB_SIZE, self.FloatingTab.Position)
+        AnimateOpen(self.MainContainer, UI_SIZE, self.MainContainer.Position)
+    end
+end
+
+-- Generate a random key
+local function GenerateKey(length)
+    local characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    local key = ""
+    
+    for i = 1, length do
+        local randomIndex = math.random(1, #characters)
+        key = key .. string.sub(characters, randomIndex, randomIndex)
+        
+        -- Add hyphens after every 4 characters (except at the end)
+        if i % 4 == 0 and i ~= length then
+            key = key .. "-"
+        end
+    end
+    
+    return key
+end
+
+-- Generate multiple keys
+local function GenerateKeys(count, length)
+    local keys = {}
+    
+    for i = 1, count do
+        table.insert(keys, GenerateKey(length))
+    end
+    
+    return keys
+end
+
+-- Create GUI
+function PhantomHub:Create()
+    -- Check if GUI already exists
+    if CoreGui:FindFirstChild("PhantomHubPremium") then
+        CoreGui:FindFirstChild("PhantomHubPremium"):Destroy()
+    end
+
+    -- Main GUI
+    self.GUI = CreateInstance("ScreenGui", {
+        Name = "PhantomHubPremium",
+        Parent = CoreGui,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        ResetOnSpawn = false
+    })
+
+    -- Floating Tab
+    self.FloatingTab = CreateInstance("Frame", {
+        Name = "FloatingTab",
+        Parent = self.GUI,
+        BackgroundColor3 = BACKGROUND_COLOR,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0.5, -FLOATING_TAB_SIZE.X.Offset / 2, 0.1, 0),
+        Size = FLOATING_TAB_SIZE,
+        ZIndex = 2
+    })
+
+    -- Rounded corners for Floating Tab
+    local FloatingTabCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 10),
+        Parent = self.FloatingTab
+    })
+
+    -- Add glow effect to Floating Tab
+    AddGlowEffect(self.FloatingTab)
+
+    -- Update the Floating Tab Title
+    self.FloatingTabTitle = CreateInstance("TextLabel", {
+        Name = "Title",
+        Parent = self.FloatingTab,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -20, 1, 0),
+        Font = FONT,
+        Text = "Phantom Hub V2",
+        TextColor3 = TEXT_COLOR,
+        TextSize = 18,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Main Container
+    self.MainContainer = CreateInstance("Frame", {
+        Name = "MainContainer",
+        Parent = self.GUI,
+        BackgroundColor3 = BACKGROUND_COLOR,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0.5, -UI_SIZE.X.Offset / 2, 0.1, FLOATING_TAB_SIZE.Y.Offset + 15),
+        Size = UI_SIZE,
+        Visible = true,
+        ZIndex = 1
+    })
+
+    -- Rounded corners for Main Container
+    local MainContainerCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 10),
+        Parent = self.MainContainer
+    })
+
+    -- Add glow effect to Main Container
+    AddGlowEffect(self.MainContainer)
+
+    -- Shadow effect
+    local Shadow = CreateInstance("ImageLabel", {
+        Name = "Shadow",
+        Parent = self.MainContainer,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, -15, 0, -15),
+        Size = UDim2.new(1, 30, 1, 30),
+        Image = "rbxassetid://5554236805",
+        ImageColor3 = Color3.fromRGB(0, 0, 0),
+        ImageTransparency = 0.6,
+        ZIndex = 0
+    })
+
+    -- Make both UI elements draggable and connected
+    -- When floating tab is dragged, main container follows
+    MakeDraggable(self.FloatingTab, self.FloatingTab, self.MainContainer)
+
+    -- When main container is dragged, floating tab follows
+    MakeDraggable(self.MainContainer, self.MainContainer, self.FloatingTab)
+
+    -- Tab Container
+    self.TabContainer = CreateInstance("Frame", {
+        Name = "TabContainer",
+        Parent = self.MainContainer,
+        BackgroundColor3 = MAIN_COLOR,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 5, 0, 5),
+        Size = UDim2.new(0, 50, 1, -10),
+        ZIndex = 2
+    })
+
+    -- Rounded corners for Tab Container
+    local TabContainerCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 8),
+        Parent = self.TabContainer
+    })
+
+    -- Content Container
+    self.ContentContainer = CreateInstance("Frame", {
+        Name = "ContentContainer",
+        Parent = self.MainContainer,
+        BackgroundColor3 = MAIN_COLOR,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 60, 0, 5),
+        Size = UDim2.new(1, -65, 1, -10),
+        ZIndex = 2
+    })
+
+    -- Rounded corners for Content Container
+    local ContentContainerCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 8),
+        Parent = self.ContentContainer
+    })
+
+    -- Create tabs
+    self.Tabs = {}
+    self.TabButtons = {}
+
+    -- Tab names (added Admin and KeyGen tabs)
+    local tabNames = {"Main", "Universal", "Reanimation", "Dancing", "Admin", "KeyGen", "Settings"}
+
+    -- Create tab buttons
+    for i, tabName in ipairs(tabNames) do
+        self:CreateTab(tabName, i)
+    end
+
+    -- Select first tab by default
+    self:SelectTab(tabNames[1])
+
+    -- Connect floating tab to main container (for dragging only)
+    self.FloatingTab.InputBegan:Connect(function(input)
+        -- No toggle functionality - the tab is now just for dragging
+    end)
+
+    -- Animate the UI opening on startup
+    AnimateOpen(self.FloatingTab, FLOATING_TAB_SIZE, self.FloatingTab.Position)
+    AnimateOpen(self.MainContainer, UI_SIZE, self.MainContainer.Position)
+
+    return self
+end
+
+-- Create Tab
+function PhantomHub:CreateTab(tabName, index)
+    -- Tab Button
+    local tabButton = CreateInstance("TextButton", {
+        Name = tabName .. "Button",
+        Parent = self.TabContainer,
+        BackgroundColor3 = MAIN_COLOR,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, (index - 1) * 35 + 5),
+        Size = UDim2.new(1, 0, 0, 30),
+        Font = FONT,
+        Text = "",
+        TextColor3 = TEXT_COLOR,
+        TextSize = 14,
+        ZIndex = 3
+    })
+
+    -- Tab Icon
+    local tabIcon = CreateInstance("ImageLabel", {
+        Name = "Icon",
+        Parent = tabButton,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0.5, -10, 0.5, -10),
+        Size = UDim2.new(0, 20, 0, 20),
+        Image = "rbxassetid://3926305904", -- Default icon pack
+        ImageRectOffset = Vector2.new(764, 244), -- Default icon
+        ImageRectSize = Vector2.new(36, 36),
+        ZIndex = 3
+    })
+
+    -- Set specific icons for each tab
+    if tabName == "Main" then
+        tabIcon.ImageRectOffset = Vector2.new(964, 204)
+    elseif tabName == "Universal" then
+        tabIcon.ImageRectOffset = Vector2.new(604, 4)
+    elseif tabName == "Reanimation" then
+        tabIcon.ImageRectOffset = Vector2.new(4, 844)
+    elseif tabName == "Dancing" then
+        tabIcon.ImageRectOffset = Vector2.new(764, 764)
+    elseif tabName == "Admin" then
+        tabIcon.Image = "rbxassetid://3926307971"
+        tabIcon.ImageRectOffset = Vector2.new(4, 4)
+        tabIcon.ImageRectSize = Vector2.new(36, 36)
+    elseif tabName == "KeyGen" then
+        tabIcon.ImageRectOffset = Vector2.new(4, 684)
+    elseif tabName == "Settings" then
+        tabIcon.ImageRectOffset = Vector2.new(4, 44)
+    end
+
+    -- Tab Selection Indicator
+    local tabIndicator = CreateInstance("Frame", {
+        Name = "Indicator",
+        Parent = tabButton,
+        BackgroundColor3 = ACCENT_COLOR,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0.5, -15),
+        Size = UDim2.new(0, 2, 0, 30),
+        Visible = false,
+        ZIndex = 3
+    })
+
+    -- Tab Content
+    local tabContent = CreateInstance("ScrollingFrame", {
+        Name = tabName .. "Content",
+        Parent = self.ContentContainer,
+        Active = true,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = ACCENT_COLOR,
+        Visible = false,
+        ZIndex = 3
+    })
+
+    -- Auto layout for buttons
+    local UIListLayout = CreateInstance("UIListLayout", {
+        Parent = tabContent,
+        Padding = UDim.new(0, 5),
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder
+    })
+
+    -- Padding
+    local UIPadding = CreateInstance("UIPadding", {
+        Parent = tabContent,
+        PaddingTop = UDim.new(0, 10),
+        PaddingBottom = UDim.new(0, 10),
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10)
+    })
+
+    -- Store tab data
+    self.Tabs[tabName] = tabContent
+    self.TabButtons[tabName] = {
+        Button = tabButton,
+        Indicator = tabIndicator
+    }
+
+    -- Create content for each tab
+    self:CreateTabButtons(tabName, tabContent)
+
+    -- Update canvas size
+    UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        tabContent.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 20)
+    end)
+
+    -- Tab button click event
+    tabButton.MouseButton1Click:Connect(function()
+        self:SelectTab(tabName)
+    end)
+
+    -- Hover effect
+    tabButton.MouseEnter:Connect(function()
+        if not self.Tabs[tabName].Visible then
+            CreateTween(tabButton, {BackgroundTransparency = 0.8}):Play()
+        end
+    end)
+
+    tabButton.MouseLeave:Connect(function()
+        if not self.Tabs[tabName].Visible then
+            CreateTween(tabButton, {BackgroundTransparency = 1}):Play()
+        end
+    end)
+end
+
+-- Create buttons for each tab
+function PhantomHub:CreateTabButtons(tabName, tabContent)
+    if tabName == "Main" then
+        -- SECTION: Main Tab Buttons
+        self:CreateButton(tabContent, "Button 1", function()
+            print("Main Tab - Button 1 clicked")
+        end)
+
+        self:CreateButton(tabContent, "Button 2", function()
+            print("Main Tab - Button 2 clicked")
+        end)
+
+        self:CreateButton(tabContent, "Button 3", function()
+            print("Main Tab - Button 3 clicked")
+        end)
+
+        self:CreateButton(tabContent, "Button 4", function()
+            print("Main Tab - Button 4 clicked")
+        end)
+
+        self:CreateButton(tabContent, "Button 5", function()
+            print("Main Tab - Button 5 clicked")
+        end)
+
+        self:CreateButton(tabContent, "Button 6", function()
+            print("Main Tab - Button 6 clicked")
+        end)
+        -- END SECTION: Main Tab Buttons
+
+    elseif tabName == "Universal" then
+        -- SECTION: Universal Tab Buttons
+        self:CreateButton(tabContent, "Infinite Yield", function()
+            print("Executing Infinite Yield...")
+            loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+        end)
+
+        self:CreateButton(tabContent, "System Broken", function()
+            print("Executing System Broken...")
+            loadstring(game:HttpGet('https://raw.githubusercontent.com/H20CalibreYT/SystemBroken/main/script'))()
+        end)
+
+        self:CreateButton(tabContent, "Baseplate", function()
+            print("Executing Baseplate...")
+            loadstring(game:HttpGet("https://pastebin.com/raw/bRfz41fk"))()
+        end)
+
+        self:CreateButton(tabContent, "Rewind", function()
+            print("Executing Rewind...")
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/AKadminlol/ReversebyAK/refs/heads/main/holdCtoReverse"))()
+        end)
+
+        self:CreateButton(tabContent, "Face Fuck", function()
+            print("Executing Fuck Face...")
+            loadstring(game:HttpGet('https://raw.githubusercontent.com/EnterpriseExperience/bruhlolw/refs/heads/main/face_bang_script.lua'))()
+        end)
+
+        self:CreateButton(tabContent, "FPS Booster", function()
+            print("Executing FPS Booster...")
+            local decalsyeeted = true
+            local g = game
+            local w = g.Workspace
+            local l = g.Lighting
+            local t = w.Terrain
+            t.WaterWaveSize = 0
+            t.WaterWaveSpeed = 0
+            t.WaterReflectance = 0
+            t.WaterTransparency = 0
+            l.GlobalShadows = false
+            l.FogEnd = 9e9
+            l.Brightness = 0
+            settings().Rendering.QualityLevel = "Level01"
+            for i, v in pairs(g:GetDescendants()) do
+                if v:IsA("Part") or v:IsA("Union") or v:IsA("CornerWedgePart") or v:IsA("TrussPart") then
+                    v.Material = "Plastic"
+                    v.Reflectance = 0
+                elseif v:IsA("Decal") or v:IsA("Texture") and decalsyeeted then
+                    v.Transparency = 1
+                elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                    v.Lifetime = NumberRange.new(0)
+                elseif v:IsA("Explosion") then
+                    v.BlastPressure = 1
+                    v.BlastRadius = 1
+                end
+            end
+            print("FPS Booster enabled")
+        end)
+        -- END SECTION: Universal Tab Buttons
+
+    elseif tabName == "Reanimation" then
+        -- SECTION: Reanimation Tab Buttons
+        self:CreateButton(tabContent, "Simple Reanimate", function()
+            print("Executing Simple Reanimate...")
+            -- Add your reanimation script here
+        end)
+
+        self:CreateButton(tabContent, "Fling Reanimate", function()
+            print("Executing Fling Reanimate...")
+            -- Add your fling reanimation script here
+        end)
+
+        self:CreateButton(tabContent, "Bullet Reanimate", function()
+            print("Executing Bullet Reanimate...")
+            -- Add your bullet reanimation script here
+        end)
+
+        self:CreateButton(tabContent, "Mizt Reanimate", function()
+            print("Executing Mizt Reanimate...")
+            -- Add your Mizt reanimation script here
+        end)
+
+        self:CreateButton(tabContent, "Nullware Reanimate", function()
+            print("Executing Nullware Reanimate...")
+            -- Add your Nullware reanimation script here
+        end)
+
+        self:CreateButton(tabContent, "Permanent Death", function()
+            print("Executing Permanent Death...")
+            -- Add your permanent death script here
+        end)
+        -- END SECTION: Reanimation Tab Buttons
+
+    elseif tabName == "Dancing" then
+        -- SECTION: Dancing Tab Buttons
+        self:CreateButton(tabContent, "Big Emote GUI", function()
+            print("Executing Big Emote GUI...")
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/loading123599/Phantom-Hub-V1.1/refs/heads/main/BigEmoteUI.lua"))()
+        end)
+
+        self:CreateButton(tabContent, "Small Emote GUI", function()
+            print("Executing Small Emote GUI...")
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/loading123599/Phantom-Hub-V1.1/refs/heads/main/SmallEmoteUI.lua"))()
+        end)
+
+        self:CreateButton(tabContent, "Default Dance", function()
+            print("Executing Default Dance...")
+            -- Add your default dance script here
+        end)
+
+        self:CreateButton(tabContent, "Orange Justice", function()
+            print("Executing Orange Justice...")
+            -- Add your Orange Justice dance script here
+        end)
+
+        self:CreateButton(tabContent, "Take The L", function()
+            print("Executing Take The L...")
+            -- Add your Take The L dance script here
+        end)
+
+        self:CreateButton(tabContent, "Gangnam Style", function()
+            print("Executing Gangnam Style...")
+            -- Add your Gangnam Style dance script here
+        end)
+        -- END SECTION: Dancing Tab Buttons
+
+    elseif tabName == "Admin" then
+        -- SECTION: Admin Tab Content
+        -- Title
+        local title = CreateInstance("TextLabel", {
+            Name = "Title",
+            Parent = tabContent,
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(1, -20, 0, 40),
+            Font = FONT,
+            Text = "ADMIN PANEL",
+            TextColor3 = ACCENT_COLOR,
+            TextSize = 24,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            ZIndex = 4
+        })
+        
+        -- Subtitle
+        local subtitle = CreateInstance("TextLabel", {
+            Name = "Subtitle",
+            Parent = tabContent,
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 0, 0, 50),
+            Size = UDim2.new(1, -20, 0, 30),
+            Font = FONT,
+            Text = "Key Management",
+            TextColor3 = TEXT_COLOR,
+            TextSize = 18,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            ZIndex = 4
+        })
+        
+        -- Generate Keys Button
+        local generateKeysButton = CreateInstance("TextButton", {
+            Name = "GenerateKeysButton",
+            Parent = tabContent,
+            BackgroundColor3 = BUTTON_COLOR,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, 10, 0, 90),
+            Size = UDim2.new(1, -40, 0, 40),
+            Font = FONT,
+            Text = "Generate Keys",
+            TextColor3 = Color3.fromRGB(150, 150, 150),
+            TextSize = 16,
+            ZIndex = 4,
+            LayoutOrder = 1
+        })
+        
+        -- Rounded corners for generate keys button
+        local generateKeysButtonCorner = CreateInstance("UICorner", {
+            CornerRadius = UDim.new(0, 6),
+            Parent = generateKeysButton
+        })
+        
+        -- Add Key to Whitelist Button
+        local addKeyButton = CreateInstance("TextButton", {
+            Name = "AddKeyButton",
+            Parent = tabContent,
+            BackgroundColor3 = BUTTON_COLOR,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, 10, 0, 140),
+            Size = UDim2.new(1, -40, 0, 40),
+            Font = FONT,
+            Text = "Add Key to Whitelist",
+            TextColor3 = Color3.fromRGB(150, 150, 150),
+            TextSize = 16,
+            ZIndex = 4,
+            LayoutOrder = 2
+        })
+        
+        -- Rounded corners for add key button
+        local addKeyButtonCorner = CreateInstance("UICorner", {
+            CornerRadius = UDim.new(0, 6),
+            Parent = addKeyButton
+        })
+        
+        -- View Whitelist Button
+        local viewWhitelistButton = CreateInstance("TextButton", {
+            Name = "ViewWhitelistButton",
+            Parent = tabContent,
+            BackgroundColor3 = BUTTON_COLOR,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, 10, 0, 190),
+            Size = UDim2.new(1, -40, 0, 40),
+            Font = FONT,
+            Text = "View Whitelist",
+            TextColor3 = Color3.fromRGB(150, 150, 150),
+            TextSize = 16,
+            ZIndex = 4,
+            LayoutOrder = 3
+        })
+        
+        -- Rounded corners for view whitelist button
+        local viewWhitelistButtonCorner = CreateInstance("UICorner", {
+            CornerRadius = UDim.new(0, 6),
+            Parent = viewWhitelistButton
+        })
+        
+        -- Button functionality
+        generateKeysButton.MouseButton1Click:Connect(function()
+            self:SelectTab("KeyGen")
+        end)
+        
+        addKeyButton.MouseButton1Click:Connect(function()
+            self:ShowNotification("Add Key to Whitelist feature coming soon!")
+        end)
+        
+        viewWhitelistButton.MouseButton1Click:Connect(function()
+            self:ShowNotification("View Whitelist feature coming soon!")
+        end)
+        
+        -- Button hover effects
+        local buttons = {generateKeysButton, addKeyButton, viewWhitelistButton}
+        
+        for _, button in ipairs(buttons) do
+            button.MouseEnter:Connect(function()
+                CreateTween(button, {BackgroundColor3 = Color3.fromRGB(30, 30, 30)}):Play()
+            end)
+            
+            button.MouseLeave:Connect(function()
+                CreateTween(button, {BackgroundColor3 = BUTTON_COLOR}):Play()
+            end)
+            
+            button.MouseButton1Down:Connect(function()
+                CreateTween(button, {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play()
+            end)
+            
+            button.MouseButton1Up:Connect(function()
+                CreateTween(button, {BackgroundColor3 = Color3.fromRGB(30, 30, 30)}):Play()
+            end)
+        end
+        -- END SECTION: Admin Tab Content
+
+    elseif tabName == "KeyGen" then
+        -- SECTION: Key Generator Tab Content
+        -- Title
+        local title = CreateInstance("TextLabel", {
+            Name = "Title",
+            Parent = tabContent,
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(1, -20, 0, 40),
+            Font = FONT,
+            Text = "KEY GENERATOR",
+            TextColor3 = TEXT_COLOR,
+            TextSize = 24,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            ZIndex = 4
+        })
+        
+        -- Subtitle
+        local subtitle = CreateInstance("TextLabel", {
+            Name = "Subtitle",
+            Parent = tabContent,
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 0, 0, 50),
+            Size = UDim2.new(1, -20, 0, 30),
+            Font = FONT,
+            Text = "Generate keys for Phantom Hub Premium",
+            TextColor3 = TEXT_COLOR,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            ZIndex = 4
+        })
+        
+        -- Key Count Input Background
+        local keyCountBg = CreateInstance("Frame", {
+            Name = "KeyCountBg",
+            Parent = tabContent,
+            BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+            BorderSizePixel = 0,
+            Position = UDim2.new(0.5, -100, 0, 90),
+            Size = UDim2.new(0, 200, 0, 40),
+            ZIndex = 4
+        })
+        
+        -- Rounded corners for key count background
+        local keyCountBgCorner = CreateInstance("UICorner", {
+            CornerRadius = UDim.new(0, 6),
+            Parent = keyCountBg
+        })
+        
+        -- Key Count Input
+        local keyCountInput = CreateInstance("TextBox", {
+            Name = "KeyCountInput",
+            Parent = keyCountBg,
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(1, 0, 1, 0),
+            Font = FONT,
+            Text = "10",
+            TextColor3 = TEXT_COLOR,
+            TextSize = 18,
+            ZIndex = 5
+        })
+        
+        -- Generate Button
+        local generateButton = CreateInstance("TextButton", {
+            Name = "GenerateButton",
+            Parent = tabContent,
+            BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+            BorderSizePixel = 0,
+            Position = UDim2.new(0.5, -100, 0, 140),
+            Size = UDim2.new(0, 200, 0, 40),
+            Font = FONT,
+            Text = "GENERATE",
+            TextColor3 = TEXT_COLOR,
+            TextSize = 18,
+            ZIndex = 4
+        })
+        
+        -- Rounded corners for generate button
+        local generateButtonCorner = CreateInstance("UICorner", {
+            CornerRadius = UDim.new(0, 6),
+            Parent = generateButton
+        })
+        
+        -- Keys Output Background
+        local keysOutputBg = CreateInstance("Frame", {
+            Name = "KeysOutputBg",
+            Parent = tabContent,
+            BackgroundColor3 = Color3.fromRGB(10, 10, 10),
+            BorderSizePixel = 0,
+            Position = UDim2.new(0.5, -125, 0, 190),
+            Size = UDim2.new(0, 250, 0, 100),
+            ZIndex = 4
+        })
+        
+        -- Rounded corners for keys output background
+        local keysOutputBgCorner = CreateInstance("UICorner", {
+            CornerRadius = UDim.new(0, 6),
+            Parent = keysOutputBg
+        })
+        
+        -- Keys Output
+        local keysOutput = CreateInstance("TextLabel", {
+            Name = "KeysOutput",
+            Parent = keysOutputBg,
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 10, 0, 10),
+            Size = UDim2.new(1, -20, 1, -20),
+            Font = Enum.Font.Code,
+            Text = "Generated keys will appear here",
+            TextColor3 = TEXT_COLOR,
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextWrapped = true,
+            ZIndex = 5
+        })
+        
+        -- Copy All Button
+        local copyAllButton = CreateInstance("TextButton", {
+            Name = "CopyAllButton",
+            Parent = tabContent,
+            BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+            BorderSizePixel = 0,
+            Position = UDim2.new(0.5, -100, 0, 300),
+            Size = UDim2.new(0, 200, 0, 30),
+            Font = FONT,
+            Text = "COPY ALL",
+            TextColor3 = TEXT_COLOR,
+            TextSize = 14,
+            ZIndex = 4
+        })
+        
+        -- Rounded corners for copy all button
+        local copyAllButtonCorner = CreateInstance("UICorner", {
+            CornerRadius = UDim.new(0, 6),
+            Parent = copyAllButton
+        })
+        
+        -- Generate Button Click Event
+        generateButton.MouseButton1Click:Connect(function()
+            local count = tonumber(keyCountInput.Text) or 10
+            count = math.clamp(count, 1, 100) -- Limit to 100 keys at once
+            
+            local keys = GenerateKeys(count, 16) -- Generate 16-character keys
+            local keysText = table.concat(keys, "\n")
+            
+            keysOutput.Text = keysText
+            self:ShowNotification("Generated " .. count .. " keys!")
+        end)
+        
+        -- Copy All Button Click Event
+        copyAllButton.MouseButton1Click:Connect(function()
+            if keysOutput.Text ~= "Generated keys will appear here" then
+                setclipboard(keysOutput.Text)
+                self:ShowNotification("All keys copied to clipboard!")
+            else
+                self:ShowNotification("No keys to copy!")
+            end
+        end)
+        
+        -- Button hover effects
+        local buttons = {generateButton, copyAllButton}
+        
+        for _, button in ipairs(buttons) do
+            button.MouseEnter:Connect(function()
+                CreateTween(button, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}):Play()
+            end)
+            
+            button.MouseLeave:Connect(function()
+                CreateTween(button, {BackgroundColor3 = Color3.fromRGB(30, 30, 30)}):Play()
+            end)
+            
+            button.MouseButton1Down:Connect(function()
+                CreateTween(button, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}):Play()
+            end)
+            
+            button.MouseButton1Up:Connect(function()
+                CreateTween(button, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}):Play()
+            end)
+        end
+        -- END SECTION: Key Generator Tab Content
+
+    elseif tabName == "Settings" then
+        -- SECTION: Settings Tab Buttons
+        self:CreateButton(tabContent, "Toggle UI", function()
+            -- Use the new ToggleUI function to toggle both elements
+            ToggleUI(self)
+        end)
+
+        self:CreateButton(tabContent, "Change Theme", function()
+            print("Changing theme...")
+            -- Add theme changing functionality here
+        end)
+
+        self:CreateButton(tabContent, "Reset Position", function()
+            self.FloatingTab.Position = UDim2.new(0.5, -FLOATING_TAB_SIZE.X.Offset / 2, 0.1, 0)
+            self.MainContainer.Position = UDim2.new(0.5, -UI_SIZE.X.Offset / 2, 0.1, FLOATING_TAB_SIZE.Y.Offset + 15)
+        end)
+
+        self:CreateButton(tabContent, "Save Settings", function()
+            print("Saving settings...")
+            -- Add settings saving functionality here
+        end)
+
+        self:CreateButton(tabContent, "Load Settings", function()
+            print("Loading settings...")
+            -- Add settings loading functionality here
+        end)
+
+        self:CreateButton(tabContent, "Destroy GUI", function()
+            self.GUI:Destroy()
+        end)
+        -- END SECTION: Settings Tab Buttons
+    end
+end
+
+-- Create Button
+function PhantomHub:CreateButton(parent, name, callback)
+    local button = CreateInstance("TextButton", {
+        Name = name .. "Button",
+        Parent = parent,
+        BackgroundColor3 = MAIN_COLOR,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, -20, 0, 30),
+        Font = FONT,
+        Text = name,
+        TextColor3 = TEXT_COLOR,
+        TextSize = 14,
+        ZIndex = 4,
+        AutoButtonColor = false
+    })
+
+    -- Rounded corners
+    local buttonCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = button
+    })
+
+    -- Gradient effect
+    local buttonGradient = CreateInstance("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 40)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 30, 30))
+        }),
+        Rotation = 90,
+        Parent = button
+    })
+
+    -- Hover and click effects
+    button.MouseEnter:Connect(function()
+        CreateTween(button, {BackgroundColor3 = HOVER_COLOR}):Play()
+    end)
+
+    button.MouseLeave:Connect(function()
+        CreateTween(button, {BackgroundColor3 = MAIN_COLOR}):Play()
+    end)
+
+    button.MouseButton1Down:Connect(function()
+        CreateTween(button, {BackgroundColor3 = ACCENT_COLOR}):Play()
+    end)
+
+    button.MouseButton1Up:Connect(function()
+        CreateTween(button, {BackgroundColor3 = HOVER_COLOR}):Play()
+        callback()
+    end)
+
+    return button
+end
+
+-- Select Tab
+function PhantomHub:SelectTab(tabName)
+    for name, tab in pairs(self.Tabs) do
+        if name == tabName then
+            tab.Visible = true
+            self.TabButtons[name].Indicator.Visible = true
+            CreateTween(self.TabButtons[name].Button, {BackgroundTransparency = 0.5}):Play()
+        else
+            tab.Visible = false
+            self.TabButtons[name].Indicator.Visible = false
+            CreateTween(self.TabButtons[name].Button, {BackgroundTransparency = 1}):Play()
+        end
+    end
+end
+
+-- Show notification
+function PhantomHub:ShowNotification(message)
+    -- Create notification
+    local notification = CreateInstance("Frame", {
+        Name = "Notification",
+        Parent = self.GUI,
+        BackgroundColor3 = MAIN_COLOR,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0.5, -125, 0.9, 0),
+        Size = UDim2.new(0, 250, 0, 30),
+        ZIndex = 10
+    })
+
+    -- Rounded corners for notification
+    local notificationCorner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(0, 4),
+        Parent = notification
+    })
+
+    -- Notification text
+    local notificationText = CreateInstance("TextLabel", {
+        Name = "NotificationText",
+        Parent = notification,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -20, 1, 0),
+        Font = FONT,
+        Text = message,
+        TextColor3 = TEXT_COLOR,
+        TextSize = 12,
+        ZIndex = 11
+    })
+
+    -- Animate notification
+    notification.Position = UDim2.new(0.5, -125, 1, 10)
+    CreateTween(notification, {Position = UDim2.new(0.5, -125, 0.9, 0)}):Play()
+
+    -- Remove notification after delay
+    delay(3, function()
+        CreateTween(notification, {Position = UDim2.new(0.5, -125, 1, 10)}):Play()
+        delay(0.5, function()
+            notification:Destroy()
+        end)
+    end)
+end
+
+-- Initialize
+local phantomHubInstance = PhantomHub:Create()
+
+-- Keybind to toggle both UI elements
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.L then
+        -- Toggle both the main container and floating tab with animation
+        ToggleUI(phantomHubInstance)
+    end
+end)
+
+-- Return the PhantomHub object
+return PhantomHub
