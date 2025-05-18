@@ -1075,7 +1075,7 @@ function KeySystem:LoadMainUI()
 
     -- Load the main UI script if available
     if MainScript then
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/ta679/g/refs/heads/main/Phantom%20Hub2"))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/ta679/g/refs/heads/main/Testuiiiii"))()
     else
         -- If no main script is provided, we can use a default one or just rely on the baseplate functionality
         ShowNotification(baseplateGUI, "Phantom Hub Premium - Infinite Baseplate mode activated!", SUCCESS_COLOR)
