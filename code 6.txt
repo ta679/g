@@ -1,4 +1,0 @@
-else
-     statusLabel.Text = "Status: Key found! Click Submit to verify."
-     statusLabel.TextColor3 = SECONDARY_TEXT_COLOR
-end
