@@ -1,0 +1,70 @@
+-- made by VIVID
+
+-- Toggle underground "invisibility" with freeze and collision off
+local UIS = game:GetService("UserInputService")
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local root = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
+
+local buried = false
+local offsetY = -11 -- how far underground to go
+local originalCFrame = nil
+local velocity = Instance.new("BodyVelocity")
+velocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+velocity.Velocity = Vector3.new(0, 0, 0)
+
+local function setCollision(state)
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = not state
+        end
+    end
+end
+
+local function freezeCharacter(state)
+    if state then
+        velocity.Parent = root
+        humanoid.PlatformStand = true
+    else
+        velocity.Parent = nil
+        humanoid.PlatformStand = false
+    end
+end
+
+local function toggleBurrow(state)
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    root = character.HumanoidRootPart
+    humanoid = character.Humanoid
+
+    if state then
+        originalCFrame = root.CFrame -- Save original location
+        setCollision(true)          -- Disable collisions
+        root.CFrame = root.CFrame * CFrame.new(0, offsetY, 0) -- Move underground
+        freezeCharacter(true)       -- Freeze to prevent falling
+    else
+        setCollision(false)         -- Enable collisions
+        if originalCFrame then
+            root.CFrame = originalCFrame -- Return to original spot
+        end
+        freezeCharacter(false)      -- Unfreeze
+    end
+end
+
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.Q then
+        buried = not buried
+        toggleBurrow(buried)
+    end
+end)
+
+player.CharacterAdded:Connect(function(char)
+    character = char
+    root = character:WaitForChild("HumanoidRootPart")
+    humanoid = character:WaitForChild("Humanoid")
+    if buried then
+        wait(0.5)
+        toggleBurrow(true)
+    end
+end)
