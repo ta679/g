@@ -1,0 +1,294 @@
+-- Vivid Hub - Key System
+-- A professional key verification system
+-- Created by Phantom Hub Team
+
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+
+-- Variables
+local Player = Players.LocalPlayer
+local Mouse = Player:GetMouse()
+local KeySystem = {}
+local MainScript = nil -- Will hold the main UI script string, ensure this is set if Option 2 for loading is used.
+
+-- Event for signalling key validation completion
+local keyValidatedEvent = Instance.new("BindableEvent")
+
+-- Constants
+local BACKGROUND_COLOR = Color3.fromRGB(15, 15, 15)
+local MAIN_COLOR = Color3.fromRGB(25, 25, 25)
+local ACCENT_COLOR = Color3.fromRGB(255, 255, 255)
+local TEXT_COLOR = Color3.fromRGB(255, 255, 255)
+local SECONDARY_TEXT_COLOR = Color3.fromRGB(180, 180, 180)
+local HOVER_COLOR = Color3.fromRGB(40, 40, 40)
+local ERROR_COLOR = Color3.fromRGB(255, 70, 70)
+local SUCCESS_COLOR = Color3.fromRGB(70, 200, 120)
+local FONT = Enum.Font.GothamBold
+local ANIMATION_DURATION = 0.3
+local KEY_WINDOW_SIZE = UDim2.new(0, 350, 0, 200)
+
+-- Valid keys (in a real system, these would be stored securely on a server)
+local VALID_KEYS = {
+    "VIVIDWASHERE",
+    "PREMIUM-ACCESS-V2",
+    "DEVELOPER-KEY-123"
+}
+
+-- Utility Functions (Omitted for brevity - assume they are the same as your provided code)
+local function CreateInstance(className, properties)
+    local instance = Instance.new(className)
+    for k, v in pairs(properties or {}) do
+        instance[k] = v
+    end
+    return instance
+end
+
+local function CreateTween(instance, properties, duration, easingStyle, easingDirection)
+    local tween = TweenService:Create(
+        instance,
+        TweenInfo.new(duration or ANIMATION_DURATION, easingStyle or Enum.EasingStyle.Quad, easingDirection or Enum.EasingDirection.Out),
+        properties
+    )
+    return tween
+end
+
+local function AddGlowEffect(object)
+    local outerGlow = CreateInstance("UIStroke", { Parent = object, Color = ACCENT_COLOR, Thickness = 1.5, Transparency = 0.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+    local innerGlow = CreateInstance("UIGradient", { Parent = outerGlow, Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 200, 200))}), Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.3),NumberSequenceKeypoint.new(1, 0.7)}) })
+    spawn(function() local rotation = 0 while object and object.Parent do rotation = (rotation + 1) % 360 if innerGlow and innerGlow.Parent then innerGlow.Rotation = rotation end task.wait(0.1) end end)
+    return outerGlow
+end
+
+local function MakeDraggable(topBarObject, object)
+    local dragging = false local dragInput, mousePos, framePos
+    topBarObject.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true mousePos = input.Position framePos = object.Position local connection connection = input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false if connection then connection:Disconnect() end end end) end end)
+    topBarObject.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end end)
+    UserInputService.InputChanged:Connect(function(input) if input == dragInput and dragging and object and object.Parent then local delta = input.Position - mousePos object.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y) end end)
+end
+
+local function AnimateOpen(element, originalSize)
+    element.Visible = true element.BackgroundTransparency = 1 element.Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset * 0.9, originalSize.Y.Scale, originalSize.Y.Offset * 0.9)
+    for _, child in pairs(element:GetChildren()) do if child:IsA("GuiObject") and not child:IsA("UIStroke") then if child.ClassName ~= "UICorner" and child.ClassName ~= "UIGradient" then child.BackgroundTransparency = 1 if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then child.TextTransparency = 1 end if child:IsA("ImageLabel") or child:IsA("ImageButton") then child.ImageTransparency = 1 end end end end
+    local sizeTween = CreateTween(element, {Size = originalSize, BackgroundTransparency = 0}) sizeTween:Play()
+    for _, child in pairs(element:GetChildren()) do if child:IsA("GuiObject") and not child:IsA("UIStroke") then if child.ClassName ~= "UICorner" and child.ClassName ~= "UIGradient" then local targetProperties = {} if child.Name == "ContentContainer" then if child.BackgroundTransparency ~= 1 then targetProperties.BackgroundTransparency = 1 end else if child.BackgroundTransparency ~= 0 then targetProperties.BackgroundTransparency = 0 end end if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then if child.TextTransparency ~= 0 then targetProperties.TextTransparency = 0 end end if child:IsA("ImageLabel") or child:IsA("ImageButton") then if child.ImageTransparency ~= 0 then targetProperties.ImageTransparency = 0 end end if next(targetProperties) then CreateTween(child, targetProperties):Play() end end end end
+    return sizeTween
+end
+
+local function AnimateClose(element, originalSize, callback)
+    local sizeTween = CreateTween(element, {Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset * 0.9, originalSize.Y.Scale, originalSize.Y.Offset * 0.9), BackgroundTransparency = 1})
+    for _, child in pairs(element:GetChildren()) do if child:IsA("GuiObject") and not child:IsA("UIStroke") then if child.ClassName ~= "UICorner" and child.ClassName ~= "UIGradient" then local properties = {BackgroundTransparency = 1} if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then properties.TextTransparency = 1 end if child:IsA("ImageLabel") or child:IsA("ImageButton") then properties.ImageTransparency = 1 end CreateTween(child, properties):Play() end end end
+    sizeTween:Play() sizeTween.Completed:Connect(function() element.Visible = false if callback then callback() end end)
+    return sizeTween
+end
+
+local function CreateButton(parent, text, position, size, callback)
+    local button = CreateInstance("TextButton", { Name = text .. "Button", Parent = parent, BackgroundColor3 = MAIN_COLOR, BorderSizePixel = 0, Position = position, Size = size, Font = FONT, Text = text, TextColor3 = TEXT_COLOR, TextSize = 14, ZIndex = 4, AutoButtonColor = false })
+    CreateInstance("UICorner", { CornerRadius = UDim.new(0, 6), Parent = button }) CreateInstance("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 40)),ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 30, 30))}), Rotation = 90, Parent = button })
+    button.MouseEnter:Connect(function() if button.Parent then CreateTween(button, {BackgroundColor3 = HOVER_COLOR}):Play() end end) button.MouseLeave:Connect(function() if button.Parent then CreateTween(button, {BackgroundColor3 = MAIN_COLOR}):Play() end end) button.MouseButton1Down:Connect(function() if button.Parent then CreateTween(button, {BackgroundColor3 = ACCENT_COLOR}):Play() end end) button.MouseButton1Up:Connect(function() if button.Parent then CreateTween(button, {BackgroundColor3 = HOVER_COLOR}):Play() end if callback then callback() end end)
+    return button
+end
+
+local function ShowNotification(parent, message, color)
+    if not parent or not parent.Parent then return end
+    local notification = CreateInstance("Frame", { Name = "Notification", Parent = parent, BackgroundColor3 = color or MAIN_COLOR, BorderSizePixel = 0, Position = UDim2.new(0.5, -125, 0.8, 0), Size = UDim2.new(0, 250, 0, 30), ZIndex = 1000 })
+    CreateInstance("UICorner", { CornerRadius = UDim.new(0, 4), Parent = notification }) CreateInstance("TextLabel", { Name = "NotificationText", Parent = notification, BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -20, 1, 0), Font = FONT, Text = message, TextColor3 = TEXT_COLOR, TextSize = 12, ZIndex = 1001 })
+    notification.Position = UDim2.new(0.5, -125, 1, 10) CreateTween(notification, {Position = UDim2.new(0.5, -125, 0.8, 0)}):Play()
+    task.delay(3, function() if notification and notification.Parent then CreateTween(notification, {Position = UDim2.new(0.5, -125, 1, 10)}):Play() task.delay(0.5, function() if notification and notification.Parent then notification:Destroy() end end) end end)
+    return notification
+end
+
+local function ValidateKey(key)
+    for _, validKey in ipairs(VALID_KEYS) do if key == validKey then return true end end
+    return false
+end
+
+function KeySystem:Create() -- (Omitted for brevity - assume same as your code, ensure "VividHubKey" and "Vivid Hub" are used consistently)
+    if CoreGui:FindFirstChild("VividHubKeySystem") then CoreGui:FindFirstChild("VividHubKeySystem"):Destroy() end
+    self.GUI = CreateInstance("ScreenGui", { Name = "Vivid Hub Key System", Parent = CoreGui, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
+    self.Overlay = CreateInstance("Frame", { Name = "Overlay", Parent = self.GUI, BackgroundColor3 = Color3.fromRGB(0,0,0), BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0,0,0,0), Size = UDim2.new(1,0,1,0), ZIndex = 1})
+    self.KeyWindow = CreateInstance("Frame", { Name = "KeyWindow", Parent = self.GUI, BackgroundColor3 = BACKGROUND_COLOR, BorderSizePixel = 0, Position = UDim2.new(0.5, -KEY_WINDOW_SIZE.X.Offset / 2, 0.5, -KEY_WINDOW_SIZE.Y.Offset / 2), Size = KEY_WINDOW_SIZE, ZIndex = 2, Visible = false })
+    CreateInstance("UICorner", {CornerRadius = UDim.new(0,10), Parent = self.KeyWindow}) AddGlowEffect(self.KeyWindow)
+    local titleBar = CreateInstance("Frame", { Name = "TitleBar", Parent = self.KeyWindow, BackgroundColor3 = MAIN_COLOR, BorderSizePixel = 0, Position = UDim2.new(0,0,0,0), Size = UDim2.new(1,0,0,30), ZIndex = 3})
+    CreateInstance("UICorner", {CornerRadius = UDim.new(0,10), Parent = titleBar}) CreateInstance("Frame", { Name = "TitleBarFix", Parent = titleBar, BackgroundColor3 = MAIN_COLOR, BorderSizePixel = 0, Position = UDim2.new(0,0,0.5,0), Size = UDim2.new(1,0,0.51,0), ZIndex = 2}) CreateInstance("TextLabel", { Name = "TitleText", Parent = titleBar, BackgroundTransparency = 1, Position = UDim2.new(0,10,0,0), Size = UDim2.new(1,-20,1,0), Font = FONT, Text = "Vivid Hub - Key System", TextColor3 = TEXT_COLOR, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4}) MakeDraggable(titleBar, self.KeyWindow)
+    local contentContainer = CreateInstance("Frame", { Name = "ContentContainer", Parent = self.KeyWindow, BackgroundTransparency = 1, Position = UDim2.new(0,10,0,40), Size = UDim2.new(1,-20,1,-50), ZIndex = 3})
+    CreateInstance("TextLabel", { Name = "KeyInputLabel", Parent = contentContainer, BackgroundTransparency = 1, Position = UDim2.new(0,0,0,0), Size = UDim2.new(1,0,0,20), Font = FONT, Text = "Enter your key to access Vivid Hub:", TextColor3 = TEXT_COLOR, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4})
+    local keyInputBox = CreateInstance("TextBox", { Name = "KeyInputBox", Parent = contentContainer, BackgroundColor3 = Color3.fromRGB(40,40,40), BorderSizePixel = 0, Position = UDim2.new(0,0,0,25), Size = UDim2.new(1,0,0,30), Font = FONT, PlaceholderText = "Enter key here...", Text = "", TextColor3 = TEXT_COLOR, TextSize = 14, ClearTextOnFocus = false, ZIndex = 4}) CreateInstance("UICorner", {CornerRadius = UDim.new(0,6), Parent = keyInputBox})
+    local statusLabel = CreateInstance("TextLabel", { Name = "StatusLabel", Parent = contentContainer, BackgroundTransparency = 1, Position = UDim2.new(0,0,0,60), Size = UDim2.new(1,0,0,20), Font = FONT, Text = "Status: Waiting for key...", TextColor3 = SECONDARY_TEXT_COLOR, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4})
+    CreateButton(contentContainer, "Submit", UDim2.new(0,0,0,90), UDim2.new(0.48,0,0,30), function() local key = keyInputBox.Text if key == "" then statusLabel.Text = "Status: Please enter a key." statusLabel.TextColor3 = ERROR_COLOR return end statusLabel.Text = "Status: Validating key..." statusLabel.TextColor3 = SECONDARY_TEXT_COLOR task.wait(1) if ValidateKey(key) then statusLabel.Text = "Status: Key validated successfully!" statusLabel.TextColor3 = SUCCESS_COLOR if self.GUI and self.GUI.Parent then ShowNotification(self.GUI, "Access granted! Loading Vivid Hub...", SUCCESS_COLOR) end pcall(function() local keyValue = Player:FindFirstChild("VividHubKey") if not keyValue then keyValue = Instance.new("StringValue", Player) keyValue.Name = "VividHubKey" end keyValue.Value = key end) task.wait(1) AnimateClose(self.KeyWindow, KEY_WINDOW_SIZE, function() if self.GUI then self.GUI:Destroy(); self.GUI = nil; end keyValidatedEvent:Fire() end) else statusLabel.Text = "Status: Invalid key. Please try again." statusLabel.TextColor3 = ERROR_COLOR if self.GUI and self.GUI.Parent then ShowNotification(self.GUI, "Invalid key! Please check and try again.", ERROR_COLOR) end end end)
+    CreateButton(contentContainer, "Get Key", UDim2.new(0.52,0,0,90), UDim2.new(0.48,0,0,30), function() statusLabel.Text = "Status: Copying link to clipboard..." statusLabel.TextColor3 = SECONDARY_TEXT_COLOR local successCopy = pcall(function() setclipboard("https://discord.gg/xJ7dCUAT") end) if successCopy then if self.GUI and self.GUI.Parent then ShowNotification(self.GUI, "Link copied to clipboard!", SUCCESS_COLOR) end statusLabel.Text = "Status: Link copied to clipboard!" else if self.GUI and self.GUI.Parent then ShowNotification(self.GUI, "Failed to copy link.", ERROR_COLOR) end statusLabel.Text = "Status: Failed to copy link." end end)
+    CreateButton(contentContainer, "Join Discord", UDim2.new(0,0,0,130), UDim2.new(1,0,0,30), function() local successCopy = pcall(function() setclipboard("https://discord.gg/xJ7dCUAT") end) if successCopy then if self.GUI and self.GUI.Parent then ShowNotification(self.GUI, "Discord invite copied!", SUCCESS_COLOR) end else if self.GUI and self.GUI.Parent then ShowNotification(self.GUI, "Failed to copy invite.", ERROR_COLOR) end end end)
+    local function attemptAutoLogin() local savedKeyVal = nil local savedKeyInstance = Player:FindFirstChild("VividHubKey") if savedKeyInstance and savedKeyInstance:IsA("StringValue") then savedKeyVal = savedKeyInstance.Value end if savedKeyVal and savedKeyVal ~= "" then if ValidateKey(savedKeyVal) then print("Vivid Hub: Valid saved key found. Auto-logging in.") if self.GUI then self.GUI:Destroy(); self.GUI = nil; end keyValidatedEvent:Fire() return true else keyInputBox.Text = "" statusLabel.Text = "Status: Saved key is invalid. Enter new key." statusLabel.TextColor3 = ERROR_COLOR if savedKeyInstance then savedKeyInstance:Destroy() end return false end end return false end
+    if not attemptAutoLogin() then self.KeyWindow.Visible = true AnimateOpen(self.KeyWindow, KEY_WINDOW_SIZE) local savedKeyInstance = Player:FindFirstChild("VividHubKey") if savedKeyInstance and savedKeyInstance:IsA("StringValue") then keyInputBox.Text = savedKeyInstance.Value if not ValidateKey(savedKeyInstance.Value) then statusLabel.Text = "Status: Saved key is invalid. Enter new key." statusLabel.TextColor3 = ERROR_COLOR else statusLabel.Text = "Status: Key found! Click Submit to verify." statusLabel.TextColor3 = SECONDARY_TEXT_COLOR end end end
+    return self
+end
+
+
+-- MODIFIED: Main execution flow with DETAILED LOGGING
+local function RunMainHubScript()
+    print("Vivid Hub: Key validation successful. Starting main hub script load process...")
+
+    local mainHubUrl = "https://raw.githubusercontent.com/ta679/g/refs/heads/main/TEST"
+    local scriptContent = nil
+    local fetchErrorDetails = {} -- Store details of each attempt
+
+    -- Method 1: game:HttpGet
+    if game and type(game.HttpGet) == "function" then
+        print("Vivid Hub: Attempting to fetch via game:HttpGet...")
+        local success, result = pcall(function()
+            scriptContent = game:HttpGet(mainHubUrl)
+        end)
+        if success and type(scriptContent) == "string" and #scriptContent > 0 then
+            print("Vivid Hub: game:HttpGet successful.")
+        else
+            local errMsg = "game:HttpGet failed or returned empty. Error: " .. tostring(result)
+            print("Vivid Hub: " .. errMsg)
+            table.insert(fetchErrorDetails, errMsg)
+            scriptContent = nil -- Ensure it's nil if this attempt fails
+        end
+    else
+        local msg = "game:HttpGet not available."
+        print("Vivid Hub: " .. msg)
+        table.insert(fetchErrorDetails, msg)
+    end
+
+    -- Method 2: syn.request (Common in Synapse X)
+    if not scriptContent then -- Only try if previous methods failed
+        if typeof(syn) == "table" and type(syn.request) == "function" then -- Check syn exists and has request
+            print("Vivid Hub: Attempting to fetch via syn.request...")
+            local success, response = pcall(function()
+                return syn.request({Url = mainHubUrl, Method = "GET"})
+            end)
+            if success and response and type(response.Body) == "string" and response.StatusCode == 200 and #response.Body > 0 then
+                scriptContent = response.Body
+                print("Vivid Hub: syn.request successful.")
+            else
+                local errMsg = "syn.request failed. "
+                if not success then errMsg = errMsg .. "Pcall Error: " .. tostring(response) -- response here is the error object
+                elseif not response then errMsg = errMsg .. "Response was nil."
+                elseif response.StatusCode ~= 200 then errMsg = errMsg .. "Status Code: " .. tostring(response.StatusCode) .. ". Body: " .. tostring(response.Body)
+                else errMsg = errMsg .. "Response body invalid or empty."
+                end
+                print("Vivid Hub: " .. errMsg)
+                table.insert(fetchErrorDetails, errMsg)
+                scriptContent = nil
+            end
+        else
+            -- Optional: Log if syn.request is not available, but can be noisy if not expected
+            -- print("Vivid Hub: syn.request not available.")
+            -- table.insert(fetchErrorDetails, "syn.request not available.")
+        end
+    end
+
+    -- Method 3: Global request (Common in some other exploits)
+    if not scriptContent then -- Only try if previous methods failed
+        if type(request) == "function" and (typeof(syn) ~= "table" or request ~= syn.request) then
+            print("Vivid Hub: Attempting to fetch via global request()...")
+            local success, response = pcall(function()
+                return request({Url = mainHubUrl, Method = "GET"})
+            end)
+            if success and response and type(response.Body) == "string" and response.StatusCode == 200 and #response.Body > 0 then
+                scriptContent = response.Body
+                print("Vivid Hub: Global request() successful.")
+            else
+                local errMsg = "Global request() failed. "
+                if not success then errMsg = errMsg .. "Pcall Error: " .. tostring(response) -- response here is the error object
+                elseif not response then errMsg = errMsg .. "Response was nil."
+                elseif response.StatusCode ~= 200 then errMsg = errMsg .. "Status Code: " .. tostring(response.StatusCode) .. ". Body: " .. tostring(response.Body)
+                else errMsg = errMsg .. "Response body invalid or empty."
+                end
+                print("Vivid Hub: " .. errMsg)
+                table.insert(fetchErrorDetails, errMsg)
+                scriptContent = nil
+            end
+        else
+            -- Optional: Log if global request is not available
+            -- print("Vivid Hub: Global request() not available or is syn.request.")
+            -- table.insert(fetchErrorDetails, "Global request() not available or is syn.request.")
+        end
+    end
+
+    -- Method 4: HttpService:GetAsync
+    if not scriptContent then -- Only try if previous methods failed
+        print("Vivid Hub: Attempting to fetch via HttpService:GetAsync...")
+        if HttpService and HttpService.HttpEnabled then
+            local success, result = pcall(function()
+                scriptContent = HttpService:GetAsync(mainHubUrl, true) -- true = nocache
+            end)
+            if success and type(scriptContent) == "string" and #scriptContent > 0 then
+                print("Vivid Hub: HttpService:GetAsync successful.")
+            else
+                local errMsg = "HttpService:GetAsync failed or returned empty. Error: " .. tostring(result)
+                print("Vivid Hub: " .. errMsg)
+                table.insert(fetchErrorDetails, errMsg)
+                scriptContent = nil
+            end
+        else
+            local httpStatus = HttpService and "HttpService.HttpEnabled is false." or "HttpService is not available."
+            local msg = "HttpService:GetAsync cannot be used. " .. httpStatus
+            print("Vivid Hub: " .. msg)
+            table.insert(fetchErrorDetails, msg)
+        end
+    end
+
+    -- Attempt to load and run the script
+    if scriptContent then
+        print("Vivid Hub: Script content obtained. Attempting to load...")
+        local func, compileError = loadstring(scriptContent)
+        if func then
+            print("Vivid Hub: Script compiled successfully. Executing...")
+            local execSuccess, execError = pcall(func)
+            if not execSuccess then
+                warn("Vivid Hub: Error executing loaded script:", execError)
+                if CoreGui then ShowNotification(CoreGui, "Error executing main script: " .. tostring(execError), ERROR_COLOR) end
+            else
+                print("Vivid Hub: Main script executed successfully.")
+            end
+        else
+            warn("Vivid Hub: loadstring failed to compile script:", compileError)
+            if CoreGui then ShowNotification(CoreGui, "Error compiling main script: " .. tostring(compileError), ERROR_COLOR) end
+        end
+    elseif MainScript and type(MainScript) == "string" and #MainScript > 0 then
+        print("Vivid Hub: All web fetch methods failed. Trying MainScript variable as fallback.")
+        local func, compileError = loadstring(MainScript)
+        if func then
+            print("Vivid Hub: MainScript (from variable) compiled successfully. Executing...")
+            local execSuccess, execError = pcall(func)
+            if not execSuccess then
+                warn("Vivid Hub: Error executing script from MainScript variable:", execError)
+                if CoreGui then ShowNotification(CoreGui, "Error executing script from MainScript: " .. tostring(execError), ERROR_COLOR) end
+            else
+                print("Vivid Hub: MainScript (from variable) executed successfully.")
+            end
+        else
+            warn("Vivid Hub: loadstring failed to compile script from MainScript variable:", compileError)
+            if CoreGui then ShowNotification(CoreGui, "Error compiling script from MainScript: " .. tostring(compileError), ERROR_COLOR) end
+        end
+    else
+        local finalErrorMsg = "Vivid Hub: CRITICAL - Failed to load main hub script. "
+        if #fetchErrorDetails > 0 then
+            finalErrorMsg = finalErrorMsg .. "All fetch attempts failed. Details: [" .. table.concat(fetchErrorDetails, " | ") .. "]"
+        else
+            finalErrorMsg = finalErrorMsg .. "No fetch methods were available or all failed silently."
+        end
+        if not (MainScript and type(MainScript) == "string" and #MainScript > 0) then
+            finalErrorMsg = finalErrorMsg .. ". MainScript variable also not set or invalid."
+        end
+        warn(finalErrorMsg)
+        if CoreGui then ShowNotification(CoreGui, "Failed to load main hub. Check console for details.", ERROR_COLOR) end
+    end
+end
+
+-- Initialize Key System UI
+local keySystemInstance = KeySystem:Create()
+
+-- Wait for key validation (either auto-login or manual submission)
+keyValidatedEvent.Event:Wait()
+
+-- Key is validated, proceed to load the main hub script
+RunMainHubScript()
+
+return KeySystem
