@@ -1,0 +1,44 @@
+```lua
+local player = game.Players.LocalPlayer
+local dupe_enabled = false
+
+local function startDupe()
+    local target = {}
+
+    for e, pt in pairs(game.Players:GetPlayers()) do
+        pcall(function()
+            if pt ~= player then
+                local tool = pt.Character and pt.Character:FindFirstChildOfClass("Tool")
+                if tool and tool:GetAttribute("ItemType") == "Pet" then
+                    table.insert(target, tool)
+                end
+            end
+        end)
+    end
+
+    if #target == 0 then
+        warn("Unknown Pet! Ask some player to hold his pet in hand")
+        return
+    end
+
+    print("Found Pet! Dupe Started! Spamming SellPet_RE")
+
+    task.spawn(function()
+        while dupe_enabled do
+            task.wait()
+            for e, z in pairs(target) do
+                local Event = game:GetService("ReplicatedStorage").GameEvents.SellPet_RE
+                for i = 1, 5000 do
+                    Event:FireServer(z)
+                end
+            end
+        end
+    end)
+end
+
+dupe_enabled = true
+startDupe()
+
+-- Get another player to hold out a pet / or your alt account then execute and enjoy infinite sheckles
+
+```
